@@ -114,7 +114,7 @@ class Panel {
     this.self = self;
     this.lastScore = -1;
     this.lastPending = -1;
-    this.lastNextKey = '';
+    this.lastNextKey = null; // null: 아직 한 번도 안 그림 (캔버스 크기를 꼭 맞추도록)
   }
 
   render() {
@@ -242,7 +242,10 @@ class Match {
     } else if (mode === 'online') {
       for (const p of players) {
         if (p.id === myId) continue;
-        this.opps.push({ id: p.id, view: new RemoteView(p.name) });
+        const view = new RemoteView(p.name);
+        // 모두 같은 순서의 슬라임을 받으므로, 첫 화면 정보가 오기 전에도 다음 슬라임을 보여 줄 수 있어요.
+        view.nextPairs = self.nextPairs;
+        this.opps.push({ id: p.id, view });
       }
       self.on('attack', (n) => roomNet.send('attack', { n }));
     }
