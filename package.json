@@ -1,0 +1,18 @@
+{
+  "name": "gugu-slime",
+  "version": "1.0.0",
+  "description": "구구팡 슬라임 - 곱셈 문제를 풀어 연쇄를 터뜨리는 초등 교육용 낙하 퍼즐 웹게임",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "license": "MIT"
+}

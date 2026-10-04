@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>구구팡 슬라임</title>
+  <meta name="description" content="같은 색 슬라임 4개를 모으고 곱셈 문제를 풀어 연쇄를 터뜨리는 초등 교육용 퍼즐 게임">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='10' fill='%234a8cff'/%3E%3Ctext x='16' y='23' font-size='18' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3E9%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+  <!-- 메인 메뉴 -->
+  <section id="screen-menu" class="screen active">
+    <div class="menu-card">
+      <div class="logo-slimes" id="logo-slimes"></div>
+      <h1 class="logo">구구팡 <span>슬라임</span></h1>
+      <p class="subtitle">같은 색 4개를 모으고, 곱셈을 풀면 펑!</p>
+
+      <label class="name-field">
+        <span>내 이름</span>
+        <input id="name-input" maxlength="10" placeholder="이름을 적어 주세요" autocomplete="off">
+      </label>
+
+      <div class="menu-section">
+        <h2>컴퓨터와 대결</h2>
+        <div class="btn-row">
+          <button class="btn lv easy" data-cpu="easy">초급</button>
+          <button class="btn lv normal" data-cpu="normal">중급</button>
+          <button class="btn lv hard" data-cpu="hard">고급</button>
+        </div>
+      </div>
+      <div class="btn-row wide">
+        <button class="btn primary" id="btn-online">친구들과 온라인 대결</button>
+      </div>
+      <div class="btn-row wide">
+        <button class="btn soft" id="btn-solo">혼자 연습하기</button>
+        <button class="btn soft" id="btn-howto">게임 방법</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 게임 방법 -->
+  <section id="screen-howto" class="screen">
+    <div class="menu-card howto">
+      <h1 class="title-sm">게임 방법</h1>
+      <ol>
+        <li>숫자가 적힌 젤리 슬라임이 <b>두 개씩</b> 떨어져요.</li>
+        <li><b>같은 색 슬라임 4개</b> 이상이 위·아래·옆으로 붙으면 그중 <b>두 숫자로 곱셈 문제</b>가 나와요. 문제에 나온 슬라임은 반짝반짝 빛나요.</li>
+        <li>정답을 맞히면 슬라임이 펑! 터지고, 이어지는 <b>연쇄는 문제 없이 자동으로</b> 터져요.</li>
+        <li>틀리면 2초 동안 기다린 뒤 다시 풀 수 있어요. 두 번 틀리면 힌트가 나와요.</li>
+        <li>연쇄를 많이 할수록 상대에게 <b>방해 슬라임</b>을 많이 보내요. 방해 슬라임은 옆에서 슬라임이 터질 때 같이 사라져요.</li>
+        <li>왼쪽에서 세 번째 줄 맨 위(✕ 표시)까지 쌓이면 져요.</li>
+      </ol>
+      <table class="keys">
+        <tr><th>← →</th><td>옮기기</td></tr>
+        <tr><th>↓</th><td>빨리 내리기</td></tr>
+        <tr><th>↑ 또는 X</th><td>시계 방향으로 돌리기</td></tr>
+        <tr><th>Z</th><td>반대 방향으로 돌리기</td></tr>
+        <tr><th>숫자 + Enter</th><td>곱셈 답 입력</td></tr>
+        <tr><th>Esc</th><td>잠깐 멈춤 (컴퓨터 대결 / 연습)</td></tr>
+      </table>
+      <p class="tip">태블릿에서는 화면 아래 버튼으로 조작할 수 있어요.</p>
+      <button class="btn primary" data-back>메뉴로</button>
+    </div>
+  </section>
+
+  <!-- 온라인 방 목록 -->
+  <section id="screen-lobby" class="screen">
+    <div class="menu-card lobby">
+      <div class="lobby-head">
+        <h1 class="title-sm">대결 방 목록</h1>
+        <span class="me-name" id="lobby-me"></span>
+      </div>
+      <div class="create-room">
+        <input id="room-title" maxlength="20" placeholder="방 이름 (예: 3반 구구단 대결)" autocomplete="off">
+        <select id="room-max" aria-label="최대 인원">
+          <option value="2">2명</option>
+          <option value="3">3명</option>
+          <option value="4">4명</option>
+        </select>
+        <button class="btn primary" id="btn-create-room">방 만들기</button>
+      </div>
+      <ul class="room-list" id="room-list"></ul>
+      <p class="status-msg" id="lobby-status"></p>
+      <button class="btn soft" data-back>메뉴로</button>
+    </div>
+  </section>
+
+  <!-- 대기실 -->
+  <section id="screen-room" class="screen">
+    <div class="menu-card room">
+      <h1 class="title-sm" id="room-title-text">방</h1>
+      <p class="room-sub" id="room-sub"></p>
+      <ul class="player-list" id="room-players"></ul>
+      <p class="status-msg" id="room-status"></p>
+      <div class="btn-row wide">
+        <button class="btn primary" id="btn-ready">준비 완료</button>
+        <button class="btn primary" id="btn-start">게임 시작</button>
+      </div>
+      <button class="btn soft" id="btn-leave-room">방 나가기</button>
+    </div>
+  </section>
+
+  <!-- 게임 화면 -->
+  <section id="screen-game" class="screen">
+    <div class="arena-fit" id="arena-fit">
+      <div class="arena" id="arena">
+        <div class="slot self-slot" id="self-slot"></div>
+        <div class="center-col">
+          <div class="mode-label" id="mode-label"></div>
+          <div class="qbox" id="qbox">
+            <div class="q-idle" id="q-idle">
+              <div class="q-idle-title">곱셈 슬라임</div>
+              <p>같은 색 <b>4개</b>를 모으면<br>곱셈 문제가 나와요!</p>
+            </div>
+            <div class="q-active" id="q-active">
+              <div class="q-label">문제를 풀면 펑!</div>
+              <div class="q-expr"><span id="q-a">7</span> × <span id="q-b">8</span> = <span class="q-input" id="q-input"></span></div>
+              <div class="q-feedback" id="q-feedback"></div>
+              <div class="keypad" id="keypad">
+                <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+                <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+                <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+                <button data-k="del" class="k-del">지우기</button><button data-k="0">0</button><button data-k="ok" class="k-ok">확인</button>
+              </div>
+            </div>
+          </div>
+          <div class="mini-stats" id="mini-stats"></div>
+          <button class="btn soft small" id="btn-quit">그만하기</button>
+        </div>
+        <div class="opp-area" id="opp-area"></div>
+      </div>
+    </div>
+    <div class="touch-controls" id="touch-controls">
+      <button data-t="ccw" aria-label="반대로 돌리기">⟲</button>
+      <button data-t="left" aria-label="왼쪽">◀</button>
+      <button data-t="down" aria-label="빨리 내리기">▼</button>
+      <button data-t="right" aria-label="오른쪽">▶</button>
+      <button data-t="cw" aria-label="돌리기">⟳</button>
+    </div>
+    <div class="overlay" id="overlay-countdown"><div class="countdown" id="countdown-text">3</div></div>
+    <div class="overlay" id="overlay-pause">
+      <div class="modal">
+        <h2>잠깐 멈춤</h2>
+        <button class="btn primary" id="btn-resume">계속하기</button>
+        <button class="btn soft" id="btn-pause-quit">메뉴로</button>
+      </div>
+    </div>
+    <div class="overlay" id="overlay-result">
+      <div class="modal">
+        <h2 id="result-title">승리!</h2>
+        <p id="result-sub"></p>
+        <div class="result-stats" id="result-stats"></div>
+        <div class="btn-row wide" id="result-buttons"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
