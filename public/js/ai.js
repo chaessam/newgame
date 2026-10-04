@@ -11,12 +11,12 @@ export const LEVELS = {
   },
   normal: {
     name: '중급', actionDelay: 0.3, think: 0.7, softDrop: false, depth: 1,
-    noise: 550, randomMove: 0.16, fireAt: 2, usePotential: true,
-    answerTime: [4.5, 7], wrongRate: 0.25,
+    noise: 550, randomMove: 0.17, fireAt: 2, usePotential: false,
+    answerTime: [4.8, 7.2], wrongRate: 0.27,
   },
   hard: {
     name: '고급', actionDelay: 0.23, think: 0.5, softDrop: false, depth: 1,
-    noise: 280, randomMove: 0.1, fireAt: 3, usePotential: true,
+    noise: 260, randomMove: 0.09, fireAt: 2, usePotential: true,
     answerTime: [3.2, 5.5], wrongRate: 0.17,
   },
 };
