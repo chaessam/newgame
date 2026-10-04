@@ -626,7 +626,7 @@ body.touch .touch-controls { display: flex; }
    아래(dock): 평소에는 큰 조작 버튼, 곱셈 문제가 나오면 큰 키패드로 바뀜 */
 .dock { display: none; }
 body.portrait .dock {
-  --dock-h: 236px;
+  --dock-h: 216px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -653,14 +653,41 @@ body.portrait .mini-stats .lb::before { content: " · "; }
 body.portrait .mini-row .btn { flex: 0 0 auto; }
 body.portrait .touch-controls { display: flex; position: static; flex: 1; padding: 0; gap: 8px; }
 body.portrait .touch-controls button { flex: 1; width: auto; height: auto; min-height: 64px; font-size: 34px; }
-body.portrait .q-expr { font-size: 40px; margin: 0 0 2px; }
-body.portrait .q-feedback { min-height: 20px; font-size: 14px; }
-body.portrait .keypad { grid-template-columns: repeat(6, 1fr); gap: 6px; }
-body.portrait .keypad button { font-size: 28px; padding: 12px 0; }
-body.portrait .keypad .k-del { font-size: 15px; }
-body.portrait .keypad .k-ok { font-size: 18px; }
-@media (max-height: 640px) {
-  body.portrait .dock { --dock-h: 206px; }
-  body.portrait .q-expr { font-size: 32px; }
-  body.portrait .keypad button { padding: 8px 0; }
+/* 문제가 나오면: 왼쪽은 문제, 오른쪽은 7 8 9 / 4 5 6 / 1 2 3 / 지우기 0 확인 키패드 */
+body.portrait .qbox.asking .q-active {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  height: 100%;
 }
+body.portrait .q-expr { font-size: 36px; margin: 0; white-space: nowrap; }
+body.portrait .q-input { display: block; width: 78%; margin: 4px auto 0; min-height: 46px; }
+body.portrait .q-feedback { min-height: 0; margin-top: 6px; font-size: 13px; }
+body.portrait .q-feedback.good { font-size: 18px; }
+body.portrait .keypad { grid-template-columns: repeat(3, 1fr); gap: 5px; height: 100%; grid-auto-rows: 1fr; }
+body.portrait .keypad button { font-size: 24px; padding: 0; }
+body.portrait .keypad .k-del { font-size: 14px; }
+body.portrait .keypad .k-ok { font-size: 16px; }
+@media (max-height: 640px) {
+  body.portrait .dock { --dock-h: 196px; }
+  body.portrait .q-expr { font-size: 30px; }
+}
+
+/* 세로 화면: 판을 촘촘하게, 상대가 여럿이면 오른쪽에 세로로 쌓기 */
+body.portrait .arena { gap: 10px; padding: 6px; }
+body.portrait .panel { padding: 8px 9px 9px; }
+body.portrait .panel-head { min-height: 0; }
+.opp-area.stack { flex-direction: column; gap: 8px; }
+.panel.tiny { padding: 6px 7px 7px; gap: 3px; border-radius: 14px; }
+.panel.tiny .panel-next,
+.panel.tiny .panel-foot span:first-child { display: none; }
+.panel.tiny .panel-head { min-height: 0; }
+.panel.tiny .panel-name { font-size: 13px; padding: 2px 4px; margin: -2px -4px; }
+.panel.tiny .panel-school { font-size: 10px; padding: 1px 6px; }
+.panel.tiny .board-frame { padding: 2px; border-radius: 8px; }
+.panel.tiny canvas.board { border-radius: 6px; }
+.panel.tiny .panel-foot { justify-content: center; }
+.panel.tiny .panel-score { font-size: 11px; letter-spacing: 0; }
+.panel.tiny .panel-qtag { font-size: 11px; padding: 3px 6px; }

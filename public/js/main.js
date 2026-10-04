@@ -89,7 +89,7 @@ class Panel {
     this.view = view;
     this.cs = cs;
     const el = document.createElement('div');
-    el.className = `panel${self ? ' self' : ''}${cs < 36 ? ' small' : ''}`;
+    el.className = `panel${self ? ' self' : ''}${cs < 36 ? ' small' : ''}${cs < 20 ? ' tiny' : ''}`;
     el.innerHTML = `
       <div class="panel-head">
         <div class="panel-who"><span class="panel-school"></span><div class="panel-name"></div></div>
@@ -262,18 +262,7 @@ class Match {
 
   buildDom() {
     quiz.hide();
-    $('self-slot').innerHTML = '';
-    $('opp-area').innerHTML = '';
-    const mySchool = pickedSchool ? shortSchool(pickedSchool.name) : '';
-    this.selfPanel = new Panel(this.self, { cs: 40, self: true, subtitle: '(나)', school: mySchool });
-    $('self-slot').appendChild(this.selfPanel.el);
-    const ocs = this.opps.length <= 1 ? 40 : this.opps.length === 2 ? 30 : 24;
-    this.oppPanels = this.opps.map((o) => {
-      const p = new Panel(o.view, { cs: ocs, school: o.school });
-      $('opp-area').appendChild(p.el);
-      return p;
-    });
-    $('opp-area').style.display = this.opps.length ? '' : 'none';
+    this.buildPanels();
     const label = this.mode === 'cpu' ? `컴퓨터 ${LEVELS[this.level].name}과 대결`
       : this.mode === 'solo' ? '혼자 연습' : `온라인 대결 · ${this.opps.length + 1}명`;
     $('mode-label').textContent = label;
@@ -281,6 +270,29 @@ class Match {
     $('overlay-pause').classList.remove('show');
     $('overlay-countdown').classList.add('show');
     this.lastCount = null;
+    this.render();
+    requestAnimationFrame(fitArena);
+  }
+
+  // 보드 판 만들기. 세로 화면이면 상대 판을 작게 해서 내 판을 최대한 크게 보여 줍니다.
+  buildPanels() {
+    const portrait = isPortrait();
+    this.portrait = portrait;
+    $('self-slot').innerHTML = '';
+    $('opp-area').innerHTML = '';
+    const mySchool = pickedSchool ? shortSchool(pickedSchool.name) : '';
+    this.selfPanel = new Panel(this.self, { cs: 40, self: true, subtitle: '(나)', school: mySchool });
+    $('self-slot').appendChild(this.selfPanel.el);
+    const n = this.opps.length;
+    const ocs = portrait ? [26, 26, 21, 14][n] : [40, 40, 30, 24][n];
+    this.oppPanels = this.opps.map((o) => {
+      const p = new Panel(o.view, { cs: ocs, school: o.school });
+      $('opp-area').appendChild(p.el);
+      return p;
+    });
+    $('opp-area').style.display = n ? '' : 'none';
+    // 세로 화면에서 상대가 2명 이상이면 오른쪽에 세로로 쌓기
+    $('opp-area').classList.toggle('stack', portrait && n > 1);
     this.render();
     requestAnimationFrame(fitArena);
   }
@@ -439,6 +451,8 @@ function fitArena() {
   const fit = $('arena-fit');
   const portrait = isPortrait();
   document.body.classList.toggle('portrait', portrait);
+  // 화면을 돌려서 가로/세로가 바뀌면 판 크기를 다시 정함
+  if (match && match.portrait !== portrait) { match.buildPanels(); return; }
   const cc = $('center-col'), dock = $('dock'), tc = $('touch-controls');
   if (portrait) {
     if (cc.parentElement !== dock) dock.prepend(cc);
