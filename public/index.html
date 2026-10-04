@@ -19,10 +19,14 @@
       <h1 class="logo">구구팡 <span>슬라임</span></h1>
       <p class="subtitle">같은 색 4개를 모으고, 곱셈을 풀면 펑!</p>
 
-      <label class="name-field">
-        <span>내 이름</span>
-        <input id="name-input" maxlength="10" placeholder="이름을 적어 주세요" autocomplete="off">
-      </label>
+      <div class="id-fields">
+        <select id="region-input" aria-label="지역">
+          <option value="">지역</option>
+        </select>
+        <input id="school-input" maxlength="20" placeholder="학교 (예: 한빛초)" autocomplete="off">
+        <input id="name-input" maxlength="10" placeholder="닉네임" autocomplete="off">
+      </div>
+      <div class="my-record" id="my-record"></div>
 
       <div class="menu-section">
         <h2>컴퓨터와 대결</h2>
@@ -36,7 +40,8 @@
         <button class="btn primary" id="btn-online">친구들과 온라인 대결</button>
       </div>
       <div class="btn-row wide">
-        <button class="btn soft" id="btn-solo">혼자 연습하기</button>
+        <button class="btn soft" id="btn-ranking">랭킹</button>
+        <button class="btn soft" id="btn-solo">혼자 연습</button>
         <button class="btn soft" id="btn-howto">게임 방법</button>
       </div>
     </div>
@@ -53,6 +58,7 @@
         <li>틀리면 2초 동안 기다린 뒤 다시 풀 수 있어요. 두 번 틀리면 힌트가 나와요.</li>
         <li>연쇄를 많이 할수록 상대에게 <b>방해 슬라임</b>을 많이 보내요. 방해 슬라임은 옆에서 슬라임이 터질 때 같이 사라져요.</li>
         <li>왼쪽에서 세 번째 줄 맨 위(✕ 표시)까지 쌓이면 져요.</li>
+        <li><b>온라인 대결</b>에서 이기면 랭킹에 기록돼요. 지역·학교·닉네임이 같으면 같은 사람으로 기록되니, 매번 똑같이 적어 주세요. (30초보다 짧은 판은 기록되지 않아요)</li>
       </ol>
       <table class="keys">
         <tr><th>← →</th><td>옮기기</td></tr>
@@ -64,6 +70,21 @@
       </table>
       <p class="tip">태블릿에서는 화면 아래 버튼으로 조작할 수 있어요.</p>
       <button class="btn primary" data-back>메뉴로</button>
+    </div>
+  </section>
+
+  <!-- 랭킹 -->
+  <section id="screen-ranking" class="screen">
+    <div class="menu-card ranking">
+      <h1 class="title-sm">랭킹</h1>
+      <div class="tabs" id="rank-tabs">
+        <button data-rank="winrate">승률</button>
+        <button data-rank="wins" class="on">승리 횟수</button>
+        <button data-rank="school">학교</button>
+      </div>
+      <p class="rank-note" id="rank-note"></p>
+      <ol class="rank-list" id="rank-list"></ol>
+      <button class="btn soft" data-back>메뉴로</button>
     </div>
   </section>
 

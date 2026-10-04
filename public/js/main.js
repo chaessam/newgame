@@ -2,9 +2,11 @@ import { PlayerGame, RemoteView } from './player.js';
 import { CpuController, LEVELS } from './ai.js';
 import { drawBoard, drawNext, drawPending, drawDemoSlime, COLORS } from './render.js';
 import { Net } from './net.js';
+import { REGIONS, normalizeSchool, normalizeNick, identityError, shortSchool, MIN_GAMES_FOR_WINRATE } from './identity.js';
 
 const $ = (id) => document.getElementById(id);
-const net = new Net();
+const lobbyNet = new Net(); // 방 목록
+const roomNet = new Net();  // 대결방
 
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -16,6 +18,9 @@ let myId = null;
 let myName = '';
 let currentRoom = null;
 let screen = 'menu';
+
+// 상대에게 내 화면을 보내는 간격(초). 1초에 최대 5번이라 무료 플랜 요청 수를 아낄 수 있어요.
+const SEND_INTERVAL = 0.2;
 
 // ---------------- 화면 전환 / 알림 ----------------
 
@@ -33,16 +38,39 @@ function toast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
-function readName() {
-  const v = $('name-input').value.trim().slice(0, 10);
-  if (!v) {
-    toast('먼저 이름을 적어 주세요!');
+function identity() {
+  return {
+    region: $('region-input').value,
+    school: normalizeSchool($('school-input').value),
+    nick: normalizeNick($('name-input').value),
+  };
+}
+
+function saveIdentity() {
+  store.set('gugu-region', $('region-input').value);
+  store.set('gugu-school', $('school-input').value.trim());
+  store.set('gugu-name', $('name-input').value.trim());
+}
+
+// full: 온라인 대결처럼 지역·학교까지 필요한지
+function readIdentity(full) {
+  saveIdentity();
+  const id = identity();
+  if (full) {
+    const err = identityError(id);
+    if (err) {
+      toast(err);
+      const el = !id.region ? 'region-input' : err.startsWith('학교') ? 'school-input' : 'name-input';
+      $(el).focus();
+      return null;
+    }
+  } else if (!id.nick) {
+    toast('먼저 닉네임을 적어 주세요!');
     $('name-input').focus();
     return null;
   }
-  store.set('gugu-name', v);
-  myName = v;
-  return v;
+  myName = id.nick;
+  return id;
 }
 
 if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) document.body.classList.add('touch');
@@ -209,7 +237,7 @@ class Match {
         if (p.id === myId) continue;
         this.opps.push({ id: p.id, view: new RemoteView(p.name) });
       }
-      self.on('attack', (n) => net.send('attack', { n }));
+      self.on('attack', (n) => roomNet.send('attack', { n }));
     }
 
     this.buildDom();
@@ -276,12 +304,12 @@ class Match {
     if (this.mode === 'online' && !this.over) {
       this.sendTimer -= dt;
       if (this.sendTimer <= 0) {
-        this.sendTimer = 0.08;
+        this.sendTimer = SEND_INTERVAL;
         const snap = this.self.snapshot();
         const key = JSON.stringify(snap);
         if (key !== this.lastSnap) {
           this.lastSnap = key;
-          net.send('state', { s: snap });
+          roomNet.send('state', { s: snap });
         }
       }
     }
@@ -301,8 +329,8 @@ class Match {
   onSelfDead() {
     quiz.hide();
     if (this.mode === 'online') {
-      net.send('state', { s: this.self.snapshot() });
-      net.send('dead');
+      roomNet.send('state', { s: this.self.snapshot() });
+      roomNet.send('dead');
       if (!this.over) toast('탈락! 다른 친구들의 게임이 끝날 때까지 지켜봐요.');
       return;
     }
@@ -328,7 +356,7 @@ class Match {
   }
 
   // win: true 승리, false 패배, null 연습 종료
-  finish(win, winnerName) {
+  finish(win, winnerName, recorded) {
     if (this.over) return;
     this.over = true;
     quiz.hide();
@@ -340,6 +368,10 @@ class Match {
       ? '구구단 실력이 쑥쑥 자라고 있어요.'
       : win ? '곱셈 연쇄 최고!'
         : winnerName ? `${winnerName} 친구가 이겼어요. 다시 도전해 봐요!` : '다시 도전해 봐요!';
+    if (this.mode === 'online') {
+      $('result-sub').textContent += recorded ? ' (랭킹에 기록됐어요)' : ' (30초보다 짧은 판은 랭킹에 기록되지 않아요)';
+      if (recorded) setTimeout(refreshMyRecord, 800);
+    }
     $('result-stats').innerHTML = `
       <div><b>${this.self.score}</b><span>점수</span></div>
       <div><b>${s.maxChain}</b><span>최대 연쇄</span></div>
@@ -356,7 +388,7 @@ class Match {
     };
     if (this.mode === 'online') {
       add('대기실로', 'primary', () => { endMatch(); showScreen('room'); renderRoom(); });
-      add('방 나가기', 'soft', () => { endMatch(); net.send('leaveRoom'); currentRoom = null; showScreen('lobby'); });
+      add('방 나가기', 'soft', () => { endMatch(); leaveRoomToLobby(); });
     } else {
       add('다시 하기', 'primary', () => startLocal(this.mode, this.level));
       add('메뉴로', 'soft', () => { endMatch(); showScreen('menu'); });
@@ -373,7 +405,6 @@ function endMatch() {
 }
 
 function startLocal(mode, level) {
-  if (!myName) myName = $('name-input').value.trim().slice(0, 10) || '나';
   endMatch();
   showScreen('game');
   match = new Match({ mode, level });
@@ -482,20 +513,30 @@ for (const b of document.querySelectorAll('#touch-controls button')) {
 
 // ---------------- 메뉴 ----------------
 
+for (const r of REGIONS) {
+  const o = document.createElement('option');
+  o.value = r;
+  o.textContent = r;
+  $('region-input').appendChild(o);
+}
+$('region-input').value = store.get('gugu-region') || '';
+$('school-input').value = store.get('gugu-school') || '';
 $('name-input').value = store.get('gugu-name') || '';
 
 document.querySelectorAll('[data-cpu]').forEach((b) => {
   b.addEventListener('click', () => {
-    if (!readName()) return;
+    if (!readIdentity(false)) return;
     startLocal('cpu', b.dataset.cpu);
   });
 });
-$('btn-solo').onclick = () => { if (readName()) startLocal('solo'); };
+$('btn-solo').onclick = () => { if (readIdentity(false)) startLocal('solo'); };
 $('btn-howto').onclick = () => showScreen('howto');
+$('btn-ranking').onclick = () => { saveIdentity(); showScreen('ranking'); loadRanking(rankType); };
 document.querySelectorAll('[data-back]').forEach((b) => {
   b.addEventListener('click', () => {
-    if (screen === 'lobby') net.send('leaveRoom');
+    if (screen === 'lobby') lobbyNet.close();
     showScreen('menu');
+    refreshMyRecord();
   });
 });
 
@@ -504,9 +545,7 @@ $('btn-quit').onclick = () => {
   if (match.mode === 'online') {
     if (!match.over && !match.self.isDead && !confirm('게임을 그만두고 방에서 나갈까요?')) return;
     endMatch();
-    net.send('leaveRoom');
-    currentRoom = null;
-    showScreen('lobby');
+    leaveRoomToLobby();
     return;
   }
   endMatch();
@@ -515,24 +554,163 @@ $('btn-quit').onclick = () => {
 $('btn-resume').onclick = () => match && match.togglePause();
 $('btn-pause-quit').onclick = () => { endMatch(); showScreen('menu'); };
 
+// ---------------- 내 기록 ----------------
+
+let recordTimer = null;
+async function refreshMyRecord() {
+  const box = $('my-record');
+  const id = identity();
+  if (identityError(id)) {
+    box.textContent = '지역·학교·닉네임을 적으면 온라인 대결 기록이 랭킹에 올라가요.';
+    return;
+  }
+  try {
+    const q = new URLSearchParams({ region: id.region, school: id.school, nick: id.nick });
+    const res = await fetch(`/api/me?${q}`);
+    if (!res.ok) throw new Error();
+    const r = await res.json();
+    const cur = identity();
+    if (cur.region !== id.region || cur.school !== id.school || cur.nick !== id.nick) return;
+    if (!r.found) {
+      box.innerHTML = '';
+      box.textContent = `${id.region} ${shortSchool(id.school)} · ${id.nick} — 아직 온라인 대결 기록이 없어요.`;
+      return;
+    }
+    const rate = Math.round((r.wins / r.games) * 100);
+    box.innerHTML = '';
+    const parts = [
+      `승리 <b>${r.wins}</b>`,
+      `대결 <b>${r.games}</b>`,
+      `승률 <b>${rate}%</b>`,
+    ];
+    if (r.winsRank) parts.push(`승리 랭킹 <b>${r.winsRank}</b>위`);
+    if (r.schoolRank) parts.push(`우리 학교 <b>${r.schoolRank}</b>위`);
+    box.innerHTML = parts.join(' · ');
+  } catch {
+    box.textContent = '';
+  }
+}
+for (const id of ['region-input', 'school-input', 'name-input']) {
+  $(id).addEventListener('input', () => {
+    clearTimeout(recordTimer);
+    recordTimer = setTimeout(() => { saveIdentity(); refreshMyRecord(); }, 500);
+  });
+}
+refreshMyRecord();
+
+// ---------------- 랭킹 ----------------
+
+let rankType = 'wins';
+document.querySelectorAll('#rank-tabs button').forEach((b) => {
+  b.addEventListener('click', () => loadRanking(b.dataset.rank));
+});
+
+async function loadRanking(type) {
+  rankType = type;
+  document.querySelectorAll('#rank-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.rank === type));
+  const ul = $('rank-list');
+  const note = $('rank-note');
+  note.textContent = type === 'winrate' ? `대결을 ${MIN_GAMES_FOR_WINRATE}판 이상 한 친구만 승률 랭킹에 올라요.`
+    : type === 'school' ? '학교 친구들의 승리 횟수를 모두 더한 순위예요.'
+      : '온라인 대결에서 이긴 횟수 순위예요.';
+  ul.innerHTML = '<li class="empty">불러오는 중...</li>';
+  let data;
+  try {
+    const res = await fetch(`/api/rank?type=${type}`);
+    if (!res.ok) throw new Error();
+    data = await res.json();
+  } catch {
+    ul.innerHTML = '<li class="empty">랭킹 서버에 연결할 수 없어요.</li>';
+    return;
+  }
+  if (rankType !== type) return;
+  ul.innerHTML = '';
+  if (!data.rows.length) {
+    ul.innerHTML = '<li class="empty">아직 기록이 없어요. 첫 번째 주인공이 되어 보세요!</li>';
+    return;
+  }
+  const me = identity();
+  data.rows.forEach((r, i) => {
+    const li = document.createElement('li');
+    const isMe = type === 'school'
+      ? r.region === me.region && r.school === me.school
+      : r.region === me.region && r.school === me.school && r.nick === me.nick;
+    if (isMe) li.className = 'me';
+    const rk = document.createElement('span');
+    rk.className = 'rk';
+    rk.textContent = i + 1;
+    const who = document.createElement('div');
+    who.className = 'who';
+    const top = document.createElement('div');
+    const sub = document.createElement('small');
+    if (type === 'school') {
+      top.textContent = r.school;
+      sub.textContent = `${r.region} · 참여 ${r.players}명`;
+    } else {
+      top.textContent = r.nick;
+      sub.textContent = `${r.region} ${shortSchool(r.school)}`;
+    }
+    who.append(top, sub);
+    const val = document.createElement('div');
+    val.className = 'val';
+    const big = document.createElement('b');
+    const small = document.createElement('small');
+    const rate = Math.round((r.wins / r.games) * 100);
+    if (type === 'winrate') {
+      big.textContent = `${rate}%`;
+      small.textContent = `${r.wins}승 / ${r.games}판`;
+    } else {
+      big.textContent = `${r.wins}승`;
+      small.textContent = type === 'school' ? `${r.games}판` : `승률 ${rate}%`;
+    }
+    val.append(big, small);
+    li.append(rk, who, val);
+    ul.appendChild(li);
+  });
+}
+
 // ---------------- 온라인 ----------------
 
-$('btn-online').onclick = async () => {
-  if (!readName()) return;
+async function enterLobby() {
+  roomNet.close();
+  currentRoom = null;
+  myId = null;
+  const id = identity();
+  $('lobby-me').textContent = `${shortSchool(id.school)} · ${id.nick}`;
   $('lobby-status').textContent = '서버에 연결하는 중...';
   $('room-list').innerHTML = '';
   showScreen('lobby');
   try {
-    await net.connect();
-    net.send('hello', { name: myName });
+    await lobbyNet.connect('/ws/lobby');
+    lobbyNet.send('hello');
   } catch {
-    $('lobby-status').textContent = '온라인 서버에 연결할 수 없어요. (npm start 로 실행한 서버에서만 온라인 대결을 할 수 있어요)';
+    $('lobby-status').textContent = '온라인 서버에 연결할 수 없어요. 인터넷 연결을 확인해 주세요.';
   }
-};
+}
+
+function leaveRoomToLobby() {
+  roomNet.send('leave');
+  roomNet.close();
+  enterLobby();
+}
+
+async function joinRoom(roomId) {
+  const id = identity();
+  lobbyNet.close();
+  try {
+    await roomNet.connect(`/ws/room/${roomId}`);
+    roomNet.send('join', id);
+  } catch {
+    toast('방에 들어갈 수 없어요.');
+    enterLobby();
+  }
+}
+
+$('btn-online').onclick = () => { if (readIdentity(true)) enterLobby(); };
 
 $('btn-create-room').onclick = () => {
-  if (!net.connected) return toast('서버에 연결되어 있지 않아요.');
-  net.send('createRoom', { title: $('room-title').value, max: $('room-max').value });
+  if (!lobbyNet.connected) return toast('서버에 연결되어 있지 않아요.');
+  lobbyNet.send('createRoom', { title: $('room-title').value, max: $('room-max').value, name: myName });
   $('room-title').value = '';
 };
 $('room-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-create-room').click(); });
@@ -540,14 +718,10 @@ $('room-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('b
 $('btn-ready').onclick = () => {
   if (!currentRoom) return;
   const me = currentRoom.players.find((p) => p.id === myId);
-  net.send('ready', { ready: !(me && me.ready) });
+  roomNet.send('ready', { ready: !(me && me.ready) });
 };
-$('btn-start').onclick = () => net.send('start');
-$('btn-leave-room').onclick = () => {
-  net.send('leaveRoom');
-  currentRoom = null;
-  showScreen('lobby');
-};
+$('btn-start').onclick = () => roomNet.send('start');
+$('btn-leave-room').onclick = () => leaveRoomToLobby();
 
 function renderRooms(list) {
   const ul = $('room-list');
@@ -567,7 +741,7 @@ function renderRooms(list) {
     title.textContent = r.title;
     const host = document.createElement('span');
     host.className = 'r-host';
-    host.textContent = `방장: ${r.host}`;
+    host.textContent = `방장: ${r.host || '-'}`;
     title.appendChild(host);
     const count = document.createElement('span');
     count.className = 'r-count';
@@ -583,7 +757,7 @@ function renderRooms(list) {
       btn.className = 'btn primary';
       btn.textContent = r.count >= r.max ? '가득 참' : '들어가기';
       btn.disabled = r.count >= r.max;
-      btn.onclick = () => net.send('joinRoom', { id: r.id });
+      btn.onclick = () => joinRoom(r.id);
       li.appendChild(btn);
     }
     ul.appendChild(li);
@@ -605,6 +779,10 @@ function renderRoom() {
     const name = document.createElement('span');
     name.className = 'p-name';
     name.textContent = p.name + (p.id === myId ? ' (나)' : '');
+    const school = document.createElement('span');
+    school.className = 'p-school';
+    school.textContent = p.school || '';
+    name.appendChild(school);
     const tag = document.createElement('span');
     tag.className = `p-tag${p.host ? ' host' : p.ready ? ' ready' : ''}`;
     tag.textContent = p.host ? '방장' : p.ready ? '준비 완료' : '기다리는 중';
@@ -624,37 +802,45 @@ function renderRoom() {
         : (me && me.ready ? '방장이 시작하길 기다려요.' : '준비가 되면 준비 완료를 눌러요.');
 }
 
-net.on('welcome', (m) => { myId = m.id; myName = m.name; $('lobby-me').textContent = `${m.name} 님`; });
-net.on('rooms', (m) => { if (screen === 'lobby') renderRooms(m.rooms); });
-net.on('joined', (m) => {
+lobbyNet.on('rooms', (m) => { if (screen === 'lobby') renderRooms(m.rooms); });
+lobbyNet.on('roomCreated', (m) => joinRoom(m.id));
+lobbyNet.on('disconnected', () => {
+  if (screen === 'lobby') $('lobby-status').textContent = '서버 연결이 끊어졌어요. 메뉴로 갔다가 다시 들어와 주세요.';
+});
+
+roomNet.on('joined', (m) => {
+  myId = m.you;
   currentRoom = m.room;
   if (screen !== 'game') showScreen('room');
   renderRoom();
 });
-net.on('room', (m) => {
+roomNet.on('room', (m) => {
   if (!currentRoom || currentRoom.id !== m.room.id) return;
   currentRoom = m.room;
   renderRoom();
 });
-net.on('error', (m) => toast(m.message));
-net.on('start', (m) => {
+roomNet.on('error', (m) => {
+  toast(m.message);
+  if (m.fatal) { roomNet.close(); enterLobby(); }
+});
+roomNet.on('start', (m) => {
   endMatch();
   showScreen('game');
   match = new Match({ mode: 'online', seed: m.seed, players: m.players });
 });
-net.on('state', (m) => { if (match && match.mode === 'online') match.remoteState(m.id, m.s); });
-net.on('attack', (m) => { if (match && match.mode === 'online' && !match.over) match.self.receiveGarbage(m.n); });
-net.on('playerDead', (m) => { if (match && match.mode === 'online') match.remoteDead(m.id); });
-net.on('gameOver', (m) => {
+roomNet.on('state', (m) => { if (match && match.mode === 'online') match.remoteState(m.id, m.s); });
+roomNet.on('attack', (m) => { if (match && match.mode === 'online' && !match.over) match.self.receiveGarbage(m.n); });
+roomNet.on('playerDead', (m) => { if (match && match.mode === 'online') match.remoteDead(m.id); });
+roomNet.on('gameOver', (m) => {
   if (!match || match.mode !== 'online') return;
-  match.finish(m.winnerId === myId, m.winner);
+  match.finish(m.winnerId === myId, m.winner, m.recorded);
 });
-net.on('disconnected', () => {
+roomNet.on('disconnected', () => {
   currentRoom = null;
   if (match && match.mode === 'online') endMatch();
-  if (['lobby', 'room', 'game'].includes(screen)) {
-    showScreen('menu');
-    toast('서버 연결이 끊어졌어요.');
+  if (['room', 'game'].includes(screen)) {
+    toast('방 연결이 끊어졌어요.');
+    enterLobby();
   }
 });
 
