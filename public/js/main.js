@@ -1,6 +1,6 @@
 import { PlayerGame, RemoteView } from './player.js';
 import { CpuController, LEVELS } from './ai.js';
-import { drawBoard, drawNext, drawPending, drawDemoSlime, COLORS } from './render.js';
+import { drawBoard, drawNextPair, drawPending, drawDemoSlime, COLORS } from './render.js';
 import { Net } from './net.js';
 import { normalizeNick, identityError, nickError, MIN_GAMES_FOR_WINRATE } from './identity.js';
 import { hasProfanity } from './profanity.js';
@@ -85,21 +85,25 @@ if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) documen
 // ---------------- 플레이어 패널 ----------------
 
 class Panel {
-  constructor(view, { cs, self = false, subtitle = '' }) {
+  constructor(view, { cs, self = false, subtitle = '', school = '' }) {
     this.view = view;
     this.cs = cs;
     const el = document.createElement('div');
     el.className = `panel${self ? ' self' : ''}${cs < 36 ? ' small' : ''}`;
     el.innerHTML = `
       <div class="panel-head">
-        <div class="panel-name"></div>
-        <canvas class="next"></canvas>
+        <div class="panel-who"><span class="panel-school"></span><div class="panel-name"></div></div>
+        <div class="panel-next">
+          <div class="nslot"><span>다음</span><canvas class="next1"></canvas></div>
+          <div class="nslot second"><span>그다음</span><canvas class="next2"></canvas></div>
+        </div>
       </div>
       <canvas class="pending"></canvas>
-      <canvas class="board"></canvas>
+      <div class="board-frame"><canvas class="board"></canvas></div>
       <div class="panel-foot"><span>점수</span><span class="panel-score">0</span></div>
       <div class="panel-qtag"></div>`;
     el.querySelector('.panel-name').textContent = view.name;
+    el.querySelector('.panel-school').textContent = school;
     if (subtitle) {
       const s = document.createElement('small');
       s.textContent = subtitle;
@@ -107,7 +111,8 @@ class Panel {
     }
     this.el = el;
     this.board = el.querySelector('.board');
-    this.next = el.querySelector('.next');
+    this.next1 = el.querySelector('.next1');
+    this.next2 = el.querySelector('.next2');
     this.pending = el.querySelector('.pending');
     this.scoreEl = el.querySelector('.panel-score');
     this.qtag = el.querySelector('.panel-qtag');
@@ -123,7 +128,9 @@ class Panel {
     drawBoard(this.board, v, cs);
     const nk = v.nextPairs ? JSON.stringify(v.nextPairs) : '';
     if (nk !== this.lastNextKey) {
-      drawNext(this.next, v.nextPairs, Math.round(cs * 0.8));
+      const pairs = v.nextPairs || [];
+      drawNextPair(this.next1, pairs[0], Math.round(cs * 0.75));
+      drawNextPair(this.next2, pairs[1], Math.round(cs * 0.55));
       this.lastNextKey = nk;
     }
     if (v.pendingIn !== this.lastPending) {
@@ -233,19 +240,19 @@ class Match {
 
     if (mode === 'cpu') {
       const lv = LEVELS[level];
-      const g = new PlayerGame({ seed: this.seed, name: `컴퓨터 (${lv.name})` });
+      const g = new PlayerGame({ seed: this.seed, name: `${lv.name} 로봇` });
       const ctrl = new CpuController(g, level, () => self.pendingIn);
       g.on('attack', (n) => self.receiveGarbage(n));
       self.on('attack', (n) => g.receiveGarbage(n));
       g.on('dead', () => { if (!self.isDead) this.finish(true); });
-      this.opps.push({ id: 'cpu', game: g, view: g, ctrl });
+      this.opps.push({ id: 'cpu', game: g, view: g, ctrl, school: '컴퓨터' });
     } else if (mode === 'online') {
       for (const p of players) {
         if (p.id === myId) continue;
         const view = new RemoteView(p.name);
         // 모두 같은 순서의 슬라임을 받으므로, 첫 화면 정보가 오기 전에도 다음 슬라임을 보여 줄 수 있어요.
         view.nextPairs = self.nextPairs;
-        this.opps.push({ id: p.id, view });
+        this.opps.push({ id: p.id, view, school: p.school || '' });
       }
       self.on('attack', (n) => roomNet.send('attack', { n }));
     }
@@ -257,11 +264,12 @@ class Match {
     quiz.hide();
     $('self-slot').innerHTML = '';
     $('opp-area').innerHTML = '';
-    this.selfPanel = new Panel(this.self, { cs: 40, self: true, subtitle: '나' });
+    const mySchool = pickedSchool ? shortSchool(pickedSchool.name) : '';
+    this.selfPanel = new Panel(this.self, { cs: 40, self: true, subtitle: '(나)', school: mySchool });
     $('self-slot').appendChild(this.selfPanel.el);
     const ocs = this.opps.length <= 1 ? 40 : this.opps.length === 2 ? 30 : 24;
     this.oppPanels = this.opps.map((o) => {
-      const p = new Panel(o.view, { cs: ocs });
+      const p = new Panel(o.view, { cs: ocs, school: o.school });
       $('opp-area').appendChild(p.el);
       return p;
     });

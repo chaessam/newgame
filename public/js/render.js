@@ -110,6 +110,21 @@ export function drawSlime(ctx, px, py, cs, cell, opts = {}) {
   ctx.restore();
 }
 
+// 보드 배경의 별과 아래쪽 네온 격자 (보드마다 같은 모양이 나오도록 고정된 난수 사용)
+function drawStars(ctx, w, h, cs) {
+  let seed = 7;
+  const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 40; i++) {
+    ctx.fillStyle = `rgba(255,255,255,${0.12 + r() * 0.45})`;
+    ctx.fillRect(r() * w, r() * h, 1.6, 1.6);
+  }
+  ctx.strokeStyle = 'rgba(122, 92, 255, 0.16)';
+  ctx.lineWidth = 1;
+  for (let y = h; y > h * 0.55; y -= cs * 0.6) {
+    ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(w, y + 0.5); ctx.stroke();
+  }
+}
+
 // 보드 캔버스 크기를 맞춥니다.
 export function sizeCanvas(canvas, w, h) {
   const s = dpr();
@@ -133,13 +148,14 @@ export function drawBoard(canvas, view, cs) {
 
   // 배경
   const bg = ctx.createLinearGradient(0, 0, 0, bh);
-  bg.addColorStop(0, '#2b2f63');
-  bg.addColorStop(1, '#1c2045');
+  bg.addColorStop(0, '#1a0b45');
+  bg.addColorStop(1, '#07031a');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, bw, bh);
+  drawStars(ctx, bw, bh, cs);
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.fillRect(0, 0, bw, pad);
-  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.strokeStyle = 'rgba(122, 92, 255, 0.12)';
   ctx.lineWidth = 1;
   for (let x = 1; x < W; x++) {
     ctx.beginPath(); ctx.moveTo(x * cs + 0.5, 0); ctx.lineTo(x * cs + 0.5, bh); ctx.stroke();
@@ -235,17 +251,13 @@ export function drawBoard(canvas, view, cs) {
   }
 }
 
-export function drawNext(canvas, pairs, cs) {
-  const w = cs * 2.6, h = cs * 2.1;
-  const ctx = sizeCanvas(canvas, w, h);
-  ctx.clearRect(0, 0, w, h);
-  if (!pairs) return;
-  const [p1, p2] = pairs;
-  drawSlime(ctx, cs * 0.1, cs * 0.05, cs, p1[1]);
-  drawSlime(ctx, cs * 0.1, cs * 1.05, cs, p1[0]);
-  const s = cs * 0.72;
-  drawSlime(ctx, cs * 1.55, cs * 0.6, s, p2[1]);
-  drawSlime(ctx, cs * 1.55, cs * 0.6 + s, s, p2[0]);
+// 다음 슬라임 한 쌍을 세로로 (위: 자식, 아래: 축)
+export function drawNextPair(canvas, pair, cs) {
+  const ctx = sizeCanvas(canvas, cs, cs * 2);
+  ctx.clearRect(0, 0, cs, cs * 2);
+  if (!pair) return;
+  drawSlime(ctx, 0, 0, cs, pair[1]);
+  drawSlime(ctx, 0, cs, cs, pair[0]);
 }
 
 // 받을 예정인 방해 슬라임 표시 (1개=작은 공, 6개=큰 공, 30개=바위, 180개=별)
@@ -271,7 +283,7 @@ export function drawPending(canvas, n, cs) {
       ctx.beginPath(); ctx.arc(x + cs * 0.3, cy, cs * 0.28, 0, Math.PI * 2); ctx.fill();
       x += cs * 0.7;
     } else if (kind === 'rock') {
-      ctx.fillStyle = '#5b4a73';
+      ctx.fillStyle = '#8a6cc4';
       roundRect(ctx, x, cy - cs * 0.3, cs * 0.6, cs * 0.6, cs * 0.12); ctx.fill();
       x += cs * 0.75;
     } else {
@@ -291,7 +303,7 @@ export function drawPending(canvas, n, cs) {
     ctx.font = `${Math.round(cs * 0.4)}px ${FONT}`;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#5b4a73';
+    ctx.fillStyle = '#ffd6f6';
     ctx.fillText(`${n}`, w - 4, h / 2);
   }
 }
