@@ -45,8 +45,8 @@ Cloudflare의 실제 실행 환경을 내 컴퓨터에서 그대로 띄우므로
 
 1. Cloudflare 대시보드 → **Workers & Pages** → **Create application**
 2. **Import a repository**(GitHub 저장소 가져오기)를 고르고 `newgame` 저장소를 선택
-3. 프로젝트 이름은 `gugu-slime`(아무 이름이나 가능), 배포 명령은 기본값 `npx wrangler deploy` 그대로 두고 **Deploy**
-4. 끝나면 `https://gugu-slime.<내 계정>.workers.dev` 주소로 접속할 수 있습니다.
+3. 프로젝트 이름은 `newgame` (`wrangler.jsonc`의 name과 같아야 함), 배포 명령은 기본값 `npx wrangler deploy` 그대로 두고 **Deploy**
+4. 끝나면 `https://newgame.<내 계정>.workers.dev` 주소로 접속할 수 있습니다.
 
 이후 `main` 브랜치에 바뀐 내용이 합쳐지면 자동으로 다시 배포됩니다.
 `wrangler.jsonc`에 필요한 설정(방 목록·랭킹 저장소, 대결방)이 모두 들어 있어서 따로 데이터베이스를 만들 필요가 없습니다.
