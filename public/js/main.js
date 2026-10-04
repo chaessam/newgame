@@ -2,7 +2,9 @@ import { PlayerGame, RemoteView } from './player.js';
 import { CpuController, LEVELS } from './ai.js';
 import { drawBoard, drawNext, drawPending, drawDemoSlime, COLORS } from './render.js';
 import { Net } from './net.js';
-import { REGIONS, normalizeSchool, normalizeNick, identityError, shortSchool, MIN_GAMES_FOR_WINRATE } from './identity.js';
+import { normalizeNick, identityError, nickError, MIN_GAMES_FOR_WINRATE } from './identity.js';
+import { hasProfanity } from './profanity.js';
+import { SCHOOLS_PATH, indexSchools, searchSchools, countSameName, shortSchool, placeOf } from './schools.js';
 
 const $ = (id) => document.getElementById(id);
 const lobbyNet = new Net(); // 방 목록
@@ -38,17 +40,20 @@ function toast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
+// 검색해서 고른 학교 { code, name, sido, addr }
+let pickedSchool = null;
+try { pickedSchool = JSON.parse(store.get('gugu-school-v2') || 'null'); } catch { pickedSchool = null; }
+
 function identity() {
   return {
-    region: $('region-input').value,
-    school: normalizeSchool($('school-input').value),
+    schoolCode: pickedSchool ? pickedSchool.code : '',
+    school: pickedSchool,
     nick: normalizeNick($('name-input').value),
   };
 }
 
 function saveIdentity() {
-  store.set('gugu-region', $('region-input').value);
-  store.set('gugu-school', $('school-input').value.trim());
+  store.set('gugu-school-v2', JSON.stringify(pickedSchool));
   store.set('gugu-name', $('name-input').value.trim());
 }
 
@@ -60,14 +65,16 @@ function readIdentity(full) {
     const err = identityError(id);
     if (err) {
       toast(err);
-      const el = !id.region ? 'region-input' : err.startsWith('학교') ? 'school-input' : 'name-input';
-      $(el).focus();
+      $(err.startsWith('학교') ? 'school-input' : 'name-input').focus();
       return null;
     }
-  } else if (!id.nick) {
-    toast('먼저 닉네임을 적어 주세요!');
-    $('name-input').focus();
-    return null;
+  } else {
+    const err = nickError(id.nick);
+    if (err) {
+      toast(err);
+      $('name-input').focus();
+      return null;
+    }
   }
   myName = id.nick;
   return id;
@@ -513,15 +520,126 @@ for (const b of document.querySelectorAll('#touch-controls button')) {
 
 // ---------------- 메뉴 ----------------
 
-for (const r of REGIONS) {
-  const o = document.createElement('option');
-  o.value = r;
-  o.textContent = r;
-  $('region-input').appendChild(o);
-}
-$('region-input').value = store.get('gugu-region') || '';
-$('school-input').value = store.get('gugu-school') || '';
 $('name-input').value = store.get('gugu-name') || '';
+
+// ---------------- 학교 검색 ----------------
+
+let schoolIndex = null;
+let schoolLoading = null;
+function loadSchoolIndex() {
+  if (schoolIndex) return Promise.resolve(schoolIndex);
+  schoolLoading ||= fetch(SCHOOLS_PATH)
+    .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+    .then((d) => { schoolIndex = indexSchools(d); return schoolIndex; })
+    .catch(() => { schoolLoading = null; return null; });
+  return schoolLoading;
+}
+
+const schoolUi = {
+  results: [],
+  active: -1,
+  showPicked() {
+    const pick = $('school-pick');
+    if (pickedSchool) {
+      $('school-input').value = `${pickedSchool.name} (${placeOf(pickedSchool)})`;
+      pick.classList.add('picked');
+    } else {
+      pick.classList.remove('picked');
+    }
+  },
+  open(items) {
+    const ul = $('school-results');
+    ul.innerHTML = '';
+    for (const item of items) ul.appendChild(item);
+    ul.classList.toggle('show', items.length > 0);
+    $('school-input').setAttribute('aria-expanded', String(items.length > 0));
+  },
+  close() { this.open([]); this.active = -1; },
+  info(text) {
+    const li = document.createElement('li');
+    li.className = 'info';
+    li.textContent = text;
+    this.open([li]);
+  },
+  async search(q) {
+    if (!q.trim()) return this.close();
+    const idx = await loadSchoolIndex();
+    if ($('school-input').value !== q) return; // 그사이 더 입력함
+    if (!idx) return this.info('학교 목록을 불러올 수 없어요.');
+    if (!idx.list.length) return this.info('학교 목록이 아직 준비되지 않았어요.');
+    this.results = searchSchools(idx, q, 40);
+    this.active = -1;
+    if (!this.results.length) return this.info('찾는 학교가 없어요. 이름을 다시 확인해 주세요.');
+    this.open(this.results.map((sc, i) => {
+      const li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      if (countSameName(idx, sc.name) > 1) li.className = 'dup';
+      const name = document.createElement('span');
+      name.textContent = sc.name;
+      const place = document.createElement('small');
+      place.textContent = placeOf(sc);
+      li.append(name, place);
+      li.addEventListener('pointerdown', (e) => { e.preventDefault(); this.pick(i); });
+      return li;
+    }));
+  },
+  pick(i) {
+    const sc = this.results[i];
+    if (!sc) return;
+    pickedSchool = { code: sc.code, name: sc.name, sido: sc.sido, addr: sc.addr };
+    saveIdentity();
+    this.close();
+    this.showPicked();
+    $('school-input').blur();
+    refreshMyRecord();
+  },
+  move(d) {
+    const lis = [...$('school-results').querySelectorAll('li[role=option]')];
+    if (!lis.length) return;
+    this.active = (this.active + d + lis.length) % lis.length;
+    lis.forEach((li, i) => li.classList.toggle('active', i === this.active));
+    lis[this.active].scrollIntoView({ block: 'nearest' });
+  },
+};
+
+let searchTimer = null;
+$('school-input').addEventListener('input', () => {
+  if (pickedSchool) {
+    // 고른 학교를 지우고 새로 검색
+    pickedSchool = null;
+    saveIdentity();
+    schoolUi.showPicked();
+    refreshMyRecord();
+  }
+  clearTimeout(searchTimer);
+  const q = $('school-input').value;
+  searchTimer = setTimeout(() => schoolUi.search(q), 150);
+});
+$('school-input').addEventListener('focus', () => {
+  loadSchoolIndex();
+  if (pickedSchool) $('school-input').select();
+});
+$('school-input').addEventListener('blur', () => setTimeout(() => {
+  schoolUi.close();
+  if (!pickedSchool) $('school-input').value = '';
+}, 150));
+$('school-input').addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); schoolUi.move(1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); schoolUi.move(-1); }
+  else if (e.key === 'Enter') {
+    e.preventDefault();
+    schoolUi.pick(schoolUi.active >= 0 ? schoolUi.active : (schoolUi.results.length === 1 ? 0 : -1));
+  } else if (e.key === 'Escape') schoolUi.close();
+});
+$('school-clear').addEventListener('click', () => {
+  pickedSchool = null;
+  saveIdentity();
+  schoolUi.showPicked();
+  $('school-input').value = '';
+  $('school-input').focus();
+  refreshMyRecord();
+});
+schoolUi.showPicked();
 
 document.querySelectorAll('[data-cpu]').forEach((b) => {
   b.addEventListener('click', () => {
@@ -561,19 +679,19 @@ async function refreshMyRecord() {
   const box = $('my-record');
   const id = identity();
   if (identityError(id)) {
-    box.textContent = '지역·학교·닉네임을 적으면 온라인 대결 기록이 랭킹에 올라가요.';
+    box.textContent = '학교를 고르고 닉네임을 적으면 온라인 대결 기록이 랭킹에 올라가요.';
     return;
   }
   try {
-    const q = new URLSearchParams({ region: id.region, school: id.school, nick: id.nick });
+    const q = new URLSearchParams({ school: id.schoolCode, nick: id.nick });
     const res = await fetch(`/api/me?${q}`);
     if (!res.ok) throw new Error();
     const r = await res.json();
     const cur = identity();
-    if (cur.region !== id.region || cur.school !== id.school || cur.nick !== id.nick) return;
+    if (cur.schoolCode !== id.schoolCode || cur.nick !== id.nick) return;
     if (!r.found) {
       box.innerHTML = '';
-      box.textContent = `${id.region} ${shortSchool(id.school)} · ${id.nick} — 아직 온라인 대결 기록이 없어요.`;
+      box.textContent = `${shortSchool(id.school.name)} · ${id.nick} — 아직 온라인 대결 기록이 없어요.`;
       return;
     }
     const rate = Math.round((r.wins / r.games) * 100);
@@ -590,12 +708,10 @@ async function refreshMyRecord() {
     box.textContent = '';
   }
 }
-for (const id of ['region-input', 'school-input', 'name-input']) {
-  $(id).addEventListener('input', () => {
-    clearTimeout(recordTimer);
-    recordTimer = setTimeout(() => { saveIdentity(); refreshMyRecord(); }, 500);
-  });
-}
+$('name-input').addEventListener('input', () => {
+  clearTimeout(recordTimer);
+  recordTimer = setTimeout(() => { saveIdentity(); refreshMyRecord(); }, 500);
+});
 refreshMyRecord();
 
 // ---------------- 랭킹 ----------------
@@ -633,8 +749,8 @@ async function loadRanking(type) {
   data.rows.forEach((r, i) => {
     const li = document.createElement('li');
     const isMe = type === 'school'
-      ? r.region === me.region && r.school === me.school
-      : r.region === me.region && r.school === me.school && r.nick === me.nick;
+      ? r.school === me.schoolCode
+      : r.school === me.schoolCode && r.nick === me.nick;
     if (isMe) li.className = 'me';
     const rk = document.createElement('span');
     rk.className = 'rk';
@@ -644,11 +760,11 @@ async function loadRanking(type) {
     const top = document.createElement('div');
     const sub = document.createElement('small');
     if (type === 'school') {
-      top.textContent = r.school;
-      sub.textContent = `${r.region} · 참여 ${r.players}명`;
+      top.textContent = r.schoolName || '(학교 정보 없음)';
+      sub.textContent = `${r.place} · 참여 ${r.players}명`;
     } else {
       top.textContent = r.nick;
-      sub.textContent = `${r.region} ${shortSchool(r.school)}`;
+      sub.textContent = `${shortSchool(r.schoolName)} · ${r.place}`;
     }
     who.append(top, sub);
     const val = document.createElement('div');
@@ -676,7 +792,7 @@ async function enterLobby() {
   currentRoom = null;
   myId = null;
   const id = identity();
-  $('lobby-me').textContent = `${shortSchool(id.school)} · ${id.nick}`;
+  $('lobby-me').textContent = `${shortSchool(id.school.name)} · ${id.nick}`;
   $('lobby-status').textContent = '서버에 연결하는 중...';
   $('room-list').innerHTML = '';
   showScreen('lobby');
@@ -699,7 +815,7 @@ async function joinRoom(roomId) {
   lobbyNet.close();
   try {
     await roomNet.connect(`/ws/room/${roomId}`);
-    roomNet.send('join', id);
+    roomNet.send('join', { schoolCode: id.schoolCode, nick: id.nick });
   } catch {
     toast('방에 들어갈 수 없어요.');
     enterLobby();
@@ -710,6 +826,7 @@ $('btn-online').onclick = () => { if (readIdentity(true)) enterLobby(); };
 
 $('btn-create-room').onclick = () => {
   if (!lobbyNet.connected) return toast('서버에 연결되어 있지 않아요.');
+  if (hasProfanity($('room-title').value)) return toast('방 이름에 사용할 수 없는 말이 들어 있어요.');
   lobbyNet.send('createRoom', { title: $('room-title').value, max: $('room-max').value, name: myName });
   $('room-title').value = '';
 };

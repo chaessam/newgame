@@ -5,9 +5,10 @@
 // 모두 WebSocket Hibernation API를 써서, 메시지를 처리하지 않는 동안에는 요금이 들지 않습니다.
 import { DurableObject } from 'cloudflare:workers';
 import {
-  normalizeSchool, normalizeNick, normalizeRegion, identityError, shortSchool,
-  MIN_GAMES_FOR_WINRATE, MIN_GAME_SECONDS,
+  normalizeNick, normalizeSchoolCode, identityError, MIN_GAMES_FOR_WINRATE, MIN_GAME_SECONDS,
 } from '../public/js/identity.js';
+import { hasProfanity } from '../public/js/profanity.js';
+import { SCHOOLS_PATH, indexSchools, shortSchool, placeOf } from '../public/js/schools.js';
 
 const HEARTBEAT_MS = 60 * 1000;      // 방이 살아 있다고 로비에 알리는 주기
 const STALE_MS = 3 * HEARTBEAT_MS;   // 이 시간 동안 소식이 없는 방은 목록에서 지움
@@ -44,6 +45,31 @@ function send(ws, type, data = {}) {
 
 const lobbyOf = (env) => env.LOBBY.get(env.LOBBY.idFromName('main'));
 
+// 전국 초등학교 목록 (public/data/schools.json). 처음 한 번만 읽어서 기억해 둡니다.
+let schoolIndex = null;
+async function loadSchools(env) {
+  if (schoolIndex) return schoolIndex;
+  try {
+    const res = await env.ASSETS.fetch(`https://assets.local${SCHOOLS_PATH}`);
+    if (!res.ok) throw new Error(String(res.status));
+    schoolIndex = indexSchools(await res.json());
+    return schoolIndex;
+  } catch {
+    return indexSchools(null);
+  }
+}
+
+// 학교 코드와 닉네임을 확인해서 { school, nick } 또는 { error } 를 돌려줌
+async function checkIdentity(env, schoolCode, nick) {
+  schoolCode = normalizeSchoolCode(schoolCode);
+  nick = normalizeNick(nick);
+  const error = identityError({ schoolCode, nick });
+  if (error) return { error };
+  const school = (await loadSchools(env)).byCode.get(schoolCode);
+  if (!school) return { error: '학교를 검색해서 다시 골라 주세요.' };
+  return { school, nick };
+}
+
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
@@ -63,17 +89,16 @@ export class Lobby extends DurableObject {
     this.cache = new Map();
     this.sql.exec(`
       CREATE TABLE IF NOT EXISTS players (
-        region TEXT NOT NULL, school TEXT NOT NULL, nick TEXT NOT NULL,
+        school TEXT NOT NULL, nick TEXT NOT NULL,
         wins INTEGER NOT NULL DEFAULT 0, games INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (region, school, nick)
+        PRIMARY KEY (school, nick)
       );
       CREATE INDEX IF NOT EXISTS players_wins ON players (wins DESC, games);
       CREATE INDEX IF NOT EXISTS players_rate ON players ((CAST(wins AS REAL) / games) DESC, wins DESC)
         WHERE games >= ${MIN_GAMES_FOR_WINRATE};
       CREATE TABLE IF NOT EXISTS schools (
-        region TEXT NOT NULL, school TEXT NOT NULL,
-        wins INTEGER NOT NULL DEFAULT 0, games INTEGER NOT NULL DEFAULT 0, players INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (region, school)
+        school TEXT PRIMARY KEY,
+        wins INTEGER NOT NULL DEFAULT 0, games INTEGER NOT NULL DEFAULT 0, players INTEGER NOT NULL DEFAULT 0
       );
       CREATE INDEX IF NOT EXISTS schools_wins ON schools (wins DESC);
       CREATE TABLE IF NOT EXISTS rooms (
@@ -87,8 +112,8 @@ export class Lobby extends DurableObject {
     const url = new URL(request.url);
     const q = url.searchParams;
     if (url.pathname === '/ws/lobby') return acceptSocket(this.ctx, request);
-    if (url.pathname === '/api/rank') return json(this.ranking(q.get('type')));
-    if (url.pathname === '/api/me') return json(this.me(q.get('region'), q.get('school'), q.get('nick')));
+    if (url.pathname === '/api/rank') return json(await this.ranking(q.get('type')));
+    if (url.pathname === '/api/me') return json(await this.me(q.get('school'), q.get('nick')));
     return json({ error: 'not found' }, 404);
   }
 
@@ -101,6 +126,7 @@ export class Lobby extends DurableObject {
     } else if (m.type === 'createRoom') {
       const id = randomId();
       const host = normalizeNick(m.name) || '친구';
+      if (hasProfanity(m.title)) return send(ws, 'error', { message: '방 이름에 사용할 수 없는 말이 들어 있어요.' });
       const title = clean(m.title, 20) || `${host}의 방`;
       const max = Math.min(4, Math.max(2, Number(m.max) || 2));
       await this.env.ROOM.get(this.env.ROOM.idFromName(id)).init({ id, title, max });
@@ -152,73 +178,77 @@ export class Lobby extends DurableObject {
 
   // --- 랭킹
 
+  // results: [{ school: 학교코드, nick, win }]  (GameRoom이 확인한 값)
   recordResult(results) {
     const now = Date.now();
     for (const p of results) {
-      const region = normalizeRegion(p.region), school = normalizeSchool(p.school), nick = normalizeNick(p.nick);
-      if (identityError({ region, school, nick })) continue;
       const win = p.win ? 1 : 0;
       const existed = this.sql.exec(
-        'SELECT 1 FROM players WHERE region = ? AND school = ? AND nick = ?', region, school, nick,
+        'SELECT 1 FROM players WHERE school = ? AND nick = ?', p.school, p.nick,
       ).toArray().length > 0;
       this.sql.exec(
-        `INSERT INTO players (region, school, nick, wins, games, updated) VALUES (?, ?, ?, ?, 1, ?)
-         ON CONFLICT (region, school, nick) DO UPDATE SET wins = wins + excluded.wins, games = games + 1, updated = excluded.updated`,
-        region, school, nick, win, now,
+        `INSERT INTO players (school, nick, wins, games, updated) VALUES (?, ?, ?, 1, ?)
+         ON CONFLICT (school, nick) DO UPDATE SET wins = wins + excluded.wins, games = games + 1, updated = excluded.updated`,
+        p.school, p.nick, win, now,
       );
       this.sql.exec(
-        `INSERT INTO schools (region, school, wins, games, players) VALUES (?, ?, ?, 1, 1)
-         ON CONFLICT (region, school) DO UPDATE SET wins = wins + excluded.wins, games = games + 1,
-           players = players + ?`,
-        region, school, win, existed ? 0 : 1,
+        `INSERT INTO schools (school, wins, games, players) VALUES (?, ?, 1, 1)
+         ON CONFLICT (school) DO UPDATE SET wins = wins + excluded.wins, games = games + 1, players = players + ?`,
+        p.school, win, existed ? 0 : 1,
       );
     }
     this.cache.clear();
   }
 
-  ranking(type) {
+  async ranking(type) {
     if (!['wins', 'winrate', 'school'].includes(type)) type = 'wins';
     const hit = this.cache.get(type);
     if (hit && Date.now() - hit.t < RANK_CACHE_MS) return hit.data;
     let rows;
     if (type === 'wins') {
       rows = this.sql.exec(
-        `SELECT region, school, nick, wins, games FROM players WHERE wins > 0
+        `SELECT school, nick, wins, games FROM players WHERE wins > 0
          ORDER BY wins DESC, games LIMIT 50`,
       ).toArray();
     } else if (type === 'winrate') {
       rows = this.sql.exec(
-        `SELECT region, school, nick, wins, games FROM players WHERE games >= ${MIN_GAMES_FOR_WINRATE}
+        `SELECT school, nick, wins, games FROM players WHERE games >= ${MIN_GAMES_FOR_WINRATE}
          ORDER BY (CAST(wins AS REAL) / games) DESC, wins DESC LIMIT 50`,
       ).toArray();
     } else {
       rows = this.sql.exec(
-        `SELECT region, school, wins, games, players FROM schools WHERE wins > 0
+        `SELECT school, wins, games, players FROM schools WHERE wins > 0
          ORDER BY wins DESC LIMIT 50`,
       ).toArray();
+    }
+    // 학교 코드 → 학교 이름과 위치
+    const idx = await loadSchools(this.env);
+    for (const r of rows) {
+      const sc = idx.byCode.get(r.school);
+      r.schoolName = sc ? sc.name : '';
+      r.place = sc ? placeOf(sc) : '';
     }
     const data = { type, minGames: MIN_GAMES_FOR_WINRATE, rows };
     this.cache.set(type, { t: Date.now(), data });
     return data;
   }
 
-  me(region, school, nick) {
-    region = normalizeRegion(region); school = normalizeSchool(school); nick = normalizeNick(nick);
-    if (identityError({ region, school, nick })) return { found: false };
+  async me(schoolCode, nick) {
+    const id = await checkIdentity(this.env, schoolCode, nick);
+    if (id.error) return { found: false };
+    const code = id.school.code;
     const row = this.sql.exec(
-      'SELECT wins, games FROM players WHERE region = ? AND school = ? AND nick = ?', region, school, nick,
+      'SELECT wins, games FROM players WHERE school = ? AND nick = ?', code, id.nick,
     ).toArray()[0];
-    if (!row) return { found: false, school };
+    if (!row) return { found: false };
     const winsRank = row.wins > 0
       ? this.sql.exec('SELECT COUNT(*) AS n FROM players WHERE wins > ?', row.wins).one().n + 1
       : null;
-    const sc = this.sql.exec(
-      'SELECT wins FROM schools WHERE region = ? AND school = ?', region, school,
-    ).toArray()[0];
+    const sc = this.sql.exec('SELECT wins FROM schools WHERE school = ?', code).toArray()[0];
     const schoolRank = sc && sc.wins > 0
       ? this.sql.exec('SELECT COUNT(*) AS n FROM schools WHERE wins > ?', sc.wins).one().n + 1
       : null;
-    return { found: true, school, wins: row.wins, games: row.games, winsRank, schoolRank, schoolWins: sc ? sc.wins : 0 };
+    return { found: true, wins: row.wins, games: row.games, winsRank, schoolRank, schoolWins: sc ? sc.wins : 0 };
   }
 }
 
@@ -262,7 +292,7 @@ export class GameRoom extends DurableObject {
     const m = this.meta;
     return {
       id: m.id, title: m.title, hostId: m.hostId, max: m.max, status: m.status,
-      players: ps.map(({ a }) => ({ id: a.id, name: a.nick, school: shortSchool(a.school), ready: a.ready, host: a.id === m.hostId })),
+      players: ps.map(({ a }) => ({ id: a.id, name: a.nick, school: shortSchool(a.schoolName), ready: a.ready, host: a.id === m.hostId })),
     };
   }
 
@@ -335,16 +365,16 @@ export class GameRoom extends DurableObject {
     const m = this.meta;
     const cur = ws.deserializeAttachment();
     if (cur && cur.id) return;
-    const region = normalizeRegion(msg.region), school = normalizeSchool(msg.school), nick = normalizeNick(msg.nick);
-    const err = identityError({ region, school, nick });
-    if (err) return this.fail(ws, err);
+    const id = await checkIdentity(this.env, msg.schoolCode, msg.nick);
+    if (id.error) return this.fail(ws, id.error);
+    const school = id.school.code, schoolName = id.school.name, nick = id.nick;
     if (m.status !== 'waiting') return this.fail(ws, '이미 게임 중인 방이에요.');
     const ps = this.players();
     if (ps.length >= m.max) return this.fail(ws, '방이 가득 찼어요.');
-    if (ps.some((p) => p.a.region === region && p.a.school === school && p.a.nick === nick)) {
+    if (ps.some((p) => p.a.school === school && p.a.nick === nick)) {
       return this.fail(ws, '같은 학교에 같은 닉네임인 친구가 이미 방에 있어요.');
     }
-    const a = { id: m.nextPid++, region, school, nick, ready: false, alive: false, joinedAt: Date.now() };
+    const a = { id: m.nextPid++, school, schoolName, nick, ready: false, alive: false, joinedAt: Date.now() };
     ws.serializeAttachment(a);
     if (!m.hostId || !ps.some((p) => p.a.id === m.hostId)) m.hostId = a.id;
     await this.save();
@@ -365,7 +395,7 @@ export class GameRoom extends DurableObject {
     m.status = 'playing';
     m.seed = crypto.getRandomValues(new Uint32Array(1))[0] >>> 1;
     m.startedAt = Date.now();
-    m.participants = ps.map(({ a: p }) => ({ id: p.id, region: p.region, school: p.school, nick: p.nick }));
+    m.participants = ps.map(({ a: p }) => ({ id: p.id, school: p.school, nick: p.nick }));
     for (const p of ps) { p.a.alive = true; p.ws.serializeAttachment(p.a); }
     await this.save();
     this.broadcast('start', { seed: m.seed, players: ps.map(({ a: p }) => ({ id: p.id, name: p.nick })) }, null, ps);
