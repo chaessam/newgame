@@ -626,7 +626,7 @@ body.touch .touch-controls { display: flex; }
    아래(dock): 평소에는 큰 조작 버튼, 곱셈 문제가 나오면 큰 키패드로 바뀜 */
 .dock { display: none; }
 body.portrait .dock {
-  --dock-h: 216px;
+  --dock-h: 140px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -641,18 +641,19 @@ body.portrait .center-col { width: auto; gap: 6px; display: flex; flex-direction
 body.portrait .mode-label,
 body.portrait .q-idle,
 body.portrait .q-label { display: none; }
-body.portrait .qbox { display: none; min-height: 0; padding: 10px 12px; }
+body.portrait .qbox { display: none; min-height: 0; padding: 8px 10px; }
 body.portrait.asking .qbox { display: flex; flex: 1; }
 body.portrait.asking .center-col { flex: 1; }
-body.portrait.asking .mini-row,
 body.portrait.asking .touch-controls { display: none; }
+/* 세로 화면에서는 게임 중 기록(푼 문제·정답률)을 숨기고 결과 창에서만 보여 줌 */
+body.portrait .mini-row { display: none !important; }
 body.portrait .mini-row { flex-direction: row; align-items: center; gap: 8px; }
 body.portrait .mini-stats { flex: 1; padding: 6px 10px; font-size: 13px; line-height: 1.35; }
 body.portrait .mini-stats .lb { display: inline; }
 body.portrait .mini-stats .lb::before { content: " · "; }
 body.portrait .mini-row .btn { flex: 0 0 auto; }
 body.portrait .touch-controls { display: flex; position: static; flex: 1; padding: 0; gap: 8px; }
-body.portrait .touch-controls button { flex: 1; width: auto; height: auto; min-height: 64px; font-size: 34px; }
+body.portrait .touch-controls button { flex: 1; width: auto; height: auto; min-height: 0; font-size: 30px; }
 /* 문제가 나오면: 왼쪽은 문제, 오른쪽은 7 8 9 / 4 5 6 / 1 2 3 / 지우기 0 확인 키패드 */
 body.portrait .qbox.asking .q-active {
   display: grid;
@@ -662,18 +663,34 @@ body.portrait .qbox.asking .q-active {
   width: 100%;
   height: 100%;
 }
-body.portrait .q-expr { font-size: 36px; margin: 0; white-space: nowrap; }
-body.portrait .q-input { display: block; width: 78%; margin: 4px auto 0; min-height: 46px; }
+body.portrait .q-expr { font-size: 30px; margin: 0; white-space: nowrap; }
+body.portrait .q-input { display: block; width: 78%; margin: 2px auto 0; min-height: 38px; }
 body.portrait .q-feedback { min-height: 0; margin-top: 6px; font-size: 13px; }
 body.portrait .q-feedback.good { font-size: 18px; }
-body.portrait .keypad { grid-template-columns: repeat(3, 1fr); gap: 5px; height: 100%; grid-auto-rows: 1fr; }
-body.portrait .keypad button { font-size: 24px; padding: 0; }
+/* 키패드 4칸 × 3줄: 7 8 9 지우기 / 4 5 6 0 / 1 2 3 확인 */
+body.portrait .qbox.asking .q-active { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr); }
+body.portrait .keypad { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr); gap: 5px; height: 100%; }
+body.portrait .keypad button { font-size: 22px; padding: 0; }
+body.portrait .keypad [data-k="7"] { grid-area: 1 / 1; }
+body.portrait .keypad [data-k="8"] { grid-area: 1 / 2; }
+body.portrait .keypad [data-k="9"] { grid-area: 1 / 3; }
+body.portrait .keypad [data-k="del"] { grid-area: 1 / 4; }
+body.portrait .keypad [data-k="4"] { grid-area: 2 / 1; }
+body.portrait .keypad [data-k="5"] { grid-area: 2 / 2; }
+body.portrait .keypad [data-k="6"] { grid-area: 2 / 3; }
+body.portrait .keypad [data-k="0"] { grid-area: 2 / 4; }
+body.portrait .keypad [data-k="1"] { grid-area: 3 / 1; }
+body.portrait .keypad [data-k="2"] { grid-area: 3 / 2; }
+body.portrait .keypad [data-k="3"] { grid-area: 3 / 3; }
+body.portrait .keypad [data-k="ok"] { grid-area: 3 / 4; }
 body.portrait .keypad .k-del { font-size: 14px; }
 body.portrait .keypad .k-ok { font-size: 16px; }
 @media (max-height: 640px) {
-  body.portrait .dock { --dock-h: 196px; }
-  body.portrait .q-expr { font-size: 30px; }
+  body.portrait .dock { --dock-h: 124px; }
+  body.portrait .q-expr { font-size: 26px; }
 }
+/* 세로 화면: 그만하기는 상대 판 아래 빈 곳에 작게 */
+body.portrait #opp-area .btn { font-size: 14px; padding: 7px 8px; align-self: stretch; }
 
 /* 세로 화면: 판을 촘촘하게, 상대가 여럿이면 오른쪽에 세로로 쌓기 */
 body.portrait .arena { gap: 10px; padding: 6px; }
@@ -691,3 +708,4 @@ body.portrait .panel-head { min-height: 0; }
 .panel.tiny .panel-foot { justify-content: center; }
 .panel.tiny .panel-score { font-size: 11px; letter-spacing: 0; }
 .panel.tiny .panel-qtag { font-size: 11px; padding: 3px 6px; }
+body.portrait .q-left { overflow: hidden; max-height: 100%; }
