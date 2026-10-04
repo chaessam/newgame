@@ -389,3 +389,141 @@ body.touch .touch-controls { display: flex; }
   .create-room input { flex-basis: 100%; }
   .create-room .btn { flex: 1; }
 }
+
+/* ---------- 학교 / 닉네임 / 내 기록 ---------- */
+.id-fields {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 8px;
+  background: #f5f3ff;
+  border-radius: 16px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+.id-fields input, .id-fields select {
+  min-width: 0;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  font-size: 17px;
+  background: #fff;
+  outline: none;
+}
+.id-fields input:focus, .id-fields select:focus { border-color: var(--primary); }
+.my-record {
+  min-height: 24px;
+  margin-bottom: 14px;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+.my-record b { color: var(--pink); font-weight: normal; }
+
+/* ---------- 랭킹 ---------- */
+.ranking { width: min(560px, 100%); }
+.tabs { display: flex; gap: 6px; background: #f1eeff; border-radius: 16px; padding: 5px; margin-bottom: 8px; }
+.tabs button {
+  flex: 1;
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 0;
+  font-size: 18px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.tabs button.on { background: #fff; color: var(--primary); box-shadow: 0 2px 6px rgba(60, 40, 140, 0.12); }
+.rank-note { color: var(--ink-soft); font-size: 14px; min-height: 20px; margin: 4px 0 8px; }
+.rank-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  max-height: 52vh;
+  overflow-y: auto;
+  text-align: left;
+}
+.rank-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f7f5ff;
+  margin-bottom: 6px;
+}
+.rank-list li.me { background: #fff2c9; outline: 2px solid var(--yellow); }
+.rank-list .rk {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e6e2ff;
+  color: var(--primary-dark);
+  flex: 0 0 auto;
+}
+.rank-list li:nth-child(1) .rk { background: #ffd23f; color: #6b4a00; }
+.rank-list li:nth-child(2) .rk { background: #d9dee8; color: #4a5263; }
+.rank-list li:nth-child(3) .rk { background: #f1b98a; color: #6e3b12; }
+.rank-list .who { flex: 1; min-width: 0; }
+.rank-list .who div { font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-list .who small { color: var(--ink-soft); font-size: 13px; }
+.rank-list .val { text-align: right; white-space: nowrap; }
+.rank-list .val b { display: block; font-size: 20px; color: var(--pink); font-weight: normal; }
+.rank-list .val small { color: var(--ink-soft); font-size: 13px; }
+.rank-list .empty { justify-content: center; color: var(--ink-soft); background: transparent; }
+.player-list .p-school { color: var(--ink-soft); font-size: 14px; margin-left: 4px; }
+
+@media (max-width: 480px) {
+  .id-fields { grid-template-columns: 1fr; }
+}
+
+/* 학교 검색 */
+.school-pick { position: relative; display: flex; }
+.school-pick input { flex: 1; padding-right: 34px; }
+.school-pick.picked input { border-color: var(--mint); background: #f0fbf5; color: #1d6b43; }
+.school-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 16px;
+  cursor: pointer;
+  display: none;
+}
+.school-pick.picked .school-clear { display: block; }
+.school-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(60, 40, 140, 0.22);
+  max-height: 260px;
+  overflow-y: auto;
+  text-align: left;
+  display: none;
+}
+.school-results.show { display: block; }
+.school-results li {
+  padding: 9px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 17px;
+}
+.school-results li small { color: var(--ink-soft); font-size: 14px; white-space: nowrap; }
+.school-results li.dup small { color: var(--pink); }
+.school-results li.active, .school-results li:hover { background: #f1eeff; }
+.school-results li.info { color: var(--ink-soft); cursor: default; justify-content: center; font-size: 15px; }
+.school-results li.info:hover { background: transparent; }

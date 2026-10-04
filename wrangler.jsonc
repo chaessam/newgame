@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "newgame",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+  // 게임 화면 파일 (index.html, js, css)
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  // 온라인 대결: Lobby(방 목록 + 랭킹) 하나, GameRoom(대결방)은 방마다 하나
+  "durable_objects": {
+    "bindings": [
+      { "name": "LOBBY", "class_name": "Lobby" },
+      { "name": "ROOM", "class_name": "GameRoom" }
+    ]
+  },
+  // 무료 플랜은 SQLite 방식 Durable Object만 쓸 수 있어요.
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Lobby", "GameRoom"] }
+  ],
+  "observability": { "enabled": true }
+}

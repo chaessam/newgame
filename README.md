@@ -13,15 +13,49 @@
 ## 모드
 - **컴퓨터와 대결**: 초급 / 중급 / 고급 (컴퓨터도 곱셈 문제를 풀며, 수준에 따라 푸는 속도와 실수 비율이 다릅니다)
 - **온라인 대결**: 방 만들기(2~4명) → 방 목록에서 들어가기 → 준비 완료 → 방장이 시작
-- **혼자 연습하기**
+- **랭킹**: 학교(검색해서 선택)와 닉네임으로 온라인 대결 기록을 저장합니다.
+  - 개인 승리 횟수 랭킹, 개인 승률 랭킹(10판 이상), 학교 랭킹(학교 학생들의 승리 횟수 합계)
+  - 이름이 같은 학교는 검색 결과에 위치(예: 경기 포천시)가 함께 나와서 골라 쓸 수 있습니다.
+  - 30초보다 짧은 판은 기록하지 않고, 대결 도중 나가면 패배로 기록합니다.
+  - 닉네임과 방 이름에 비속어를 쓸 수 없습니다. (`public/js/profanity.js`에서 단어를 더하거나 뺄 수 있음)
+- **혼자 연습**
 
-## 실행
+## 실행 (내 컴퓨터에서)
 ```bash
 npm install
-npm start          # http://localhost:3000
+npm run dev        # http://localhost:8787
 ```
-같은 네트워크의 다른 컴퓨터/태블릿에서는 `http://<서버 컴퓨터 IP>:3000` 으로 접속하면 함께 대결할 수 있습니다.
-인터넷에 공개하려면 Node.js를 지원하는 호스팅(Render, Railway, Fly.io 등)에 올리면 됩니다 (`PORT` 환경 변수 지원).
+Cloudflare의 실제 실행 환경을 내 컴퓨터에서 그대로 띄우므로, 온라인 대결과 랭킹까지 모두 확인할 수 있습니다.
+
+## 학교 목록 만들기 (처음 한 번, 이후 1년에 한 번)
+학교 검색에 쓰는 전국 초등학교 목록(`public/data/schools.json`)은 공식 데이터로 만듭니다.
+
+**방법 1. NEIS 교육정보 개방 포털 (추천)**
+1. https://open.neis.go.kr 에 가입하고 인증키를 신청합니다. (무료)
+2. `NEIS_API_KEY=발급받은키 npm run schools`
+
+**방법 2. 공공데이터포털 CSV**
+1. 공공데이터포털에서 "전국초중등학교위치표준데이터" CSV를 내려받습니다.
+2. `npm run schools -- --csv 내려받은파일.csv`
+
+랭킹은 학교 코드로 저장되므로, 한 번 정한 방법을 계속 쓰세요. 만든 파일을 커밋하면 배포에 함께 올라갑니다.
+
+## 배포 (Cloudflare 무료 플랜)
+온라인 대결 서버는 Cloudflare **Workers + Durable Objects**로 동작합니다. (Pages가 아니라 **Workers**로 만들어야 합니다.)
+
+1. Cloudflare 대시보드 → **Workers & Pages** → **Create application**
+2. **Import a repository**(GitHub 저장소 가져오기)를 고르고 `newgame` 저장소를 선택
+3. 프로젝트 이름은 `newgame` (`wrangler.jsonc`의 name과 같아야 함), 배포 명령은 기본값 `npx wrangler deploy` 그대로 두고 **Deploy**
+4. 끝나면 `https://newgame.<내 계정>.workers.dev` 주소로 접속할 수 있습니다.
+
+이후 `main` 브랜치에 바뀐 내용이 합쳐지면 자동으로 다시 배포됩니다.
+`wrangler.jsonc`에 필요한 설정(방 목록·랭킹 저장소, 대결방)이 모두 들어 있어서 따로 데이터베이스를 만들 필요가 없습니다.
+
+### 무료 플랜으로 버틸 수 있는 양
+- 대결 중에는 내 화면 정보를 1초에 최대 5번만 보냅니다.
+- Cloudflare는 이런 메시지 20개를 요청 1건으로 세므로, 3분짜리 한 판에 한 명당 약 45건입니다.
+- 무료 한도는 하루 10만 건이라, 대략 **하루 2,000명·판** 정도까지 무료입니다. 넘으면 그날은 온라인 대결이 막히고, 컴퓨터 대결·연습은 계속 됩니다.
+- 사용자가 더 늘면 Workers 유료 플랜(월 $5)으로 올리면 됩니다.
 
 ## 조작
 | 키 | 동작 |
@@ -36,12 +70,14 @@ npm start          # http://localhost:3000
 터치 기기에서는 화면 아래 버튼과 화면 키패드를 사용합니다.
 
 ## 구조
-- `server.js` – 정적 파일 + WebSocket 방/로비 서버
+- `src/worker.js` – Cloudflare 서버: 방 목록 + 랭킹(Lobby), 대결방(GameRoom)
+- `wrangler.jsonc` – Cloudflare 설정
 - `public/js/core.js` – 보드·연쇄·점수 규칙
 - `public/js/player.js` – 한 플레이어의 게임 진행, 온라인 상대 화면
 - `public/js/ai.js` – 컴퓨터 상대
 - `public/js/render.js` – 캔버스 그리기
-- `public/js/main.js` – 화면/메뉴/조작/온라인 연결
+- `public/js/identity.js` – 지역·학교·닉네임 규칙
+- `public/js/main.js` – 화면/메뉴/조작/온라인 연결/랭킹 화면
 
 ## 테스트
 ```bash
