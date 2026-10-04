@@ -131,7 +131,7 @@
     <div class="arena-fit" id="arena-fit">
       <div class="arena" id="arena">
         <div class="slot self-slot" id="self-slot"></div>
-        <div class="center-col">
+        <div class="center-col" id="center-col">
           <div class="mode-label" id="mode-label"></div>
           <div class="qbox" id="qbox">
             <div class="q-idle" id="q-idle">
@@ -150,8 +150,10 @@
               </div>
             </div>
           </div>
-          <div class="mini-stats" id="mini-stats"></div>
-          <button class="btn soft small" id="btn-quit">그만하기</button>
+          <div class="mini-row">
+            <div class="mini-stats" id="mini-stats"></div>
+            <button class="btn soft small" id="btn-quit">그만하기</button>
+          </div>
         </div>
         <div class="opp-area" id="opp-area"></div>
       </div>
@@ -163,6 +165,8 @@
       <button data-t="right" aria-label="오른쪽">▶</button>
       <button data-t="cw" aria-label="돌리기">⟳</button>
     </div>
+    <!-- 세로 화면(휴대폰)에서는 곱셈 창과 조작 버튼을 아래쪽에 크게 모읍니다 -->
+    <div class="dock" id="dock"></div>
     <div class="overlay" id="overlay-countdown"><div class="countdown" id="countdown-text">3</div></div>
     <div class="overlay" id="overlay-pause">
       <div class="modal">

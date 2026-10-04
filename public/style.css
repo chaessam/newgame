@@ -527,3 +527,55 @@ body.touch .touch-controls { display: flex; }
 .school-results li.active, .school-results li:hover { background: #f1eeff; }
 .school-results li.info { color: var(--ink-soft); cursor: default; justify-content: center; font-size: 15px; }
 .school-results li.info:hover { background: transparent; }
+
+/* ---------- 세로 화면 (휴대폰) ----------
+   위: 두 보드를 나란히 크게
+   아래(dock): 평소에는 큰 조작 버튼, 곱셈 문제가 나오면 큰 키패드로 바뀜 */
+.mini-row { display: flex; flex-direction: column; gap: 12px; }
+.dock { display: none; }
+body.portrait .dock {
+  --dock-h: 236px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--dock-h);
+  padding: 6px 10px max(10px, env(safe-area-inset-bottom));
+}
+body.portrait .center-col { width: auto; gap: 6px; display: flex; flex-direction: column; }
+body.portrait .mode-label,
+body.portrait .q-idle,
+body.portrait .q-label { display: none; }
+body.portrait .qbox { display: none; min-height: 0; padding: 10px 12px; }
+body.portrait.asking .qbox { display: flex; flex: 1; }
+body.portrait.asking .center-col { flex: 1; }
+body.portrait.asking .mini-row,
+body.portrait.asking .touch-controls { display: none; }
+body.portrait .mini-row { flex-direction: row; align-items: center; gap: 8px; }
+body.portrait .mini-stats { flex: 1; padding: 6px 10px; font-size: 13px; line-height: 1.35; }
+body.portrait .mini-stats .lb { display: inline; }
+body.portrait .mini-stats .lb::before { content: " · "; }
+body.portrait .mini-row .btn { flex: 0 0 auto; }
+body.portrait .touch-controls {
+  display: flex;
+  position: static;
+  flex: 1;
+  padding: 0;
+  gap: 8px;
+}
+body.portrait .touch-controls button { flex: 1; width: auto; height: auto; min-height: 64px; font-size: 34px; }
+body.portrait .q-expr { font-size: 40px; margin: 0 0 2px; }
+body.portrait .q-feedback { min-height: 20px; font-size: 14px; }
+body.portrait .keypad { grid-template-columns: repeat(6, 1fr); gap: 6px; }
+body.portrait .keypad button { font-size: 28px; padding: 12px 0; }
+body.portrait .keypad .k-del { font-size: 15px; }
+body.portrait .keypad .k-ok { font-size: 18px; }
+@media (max-height: 640px) {
+  body.portrait .dock { --dock-h: 206px; }
+  body.portrait .q-expr { font-size: 32px; }
+  body.portrait .keypad button { padding: 8px 0; }
+}
+.mini-stats .lb { display: block; }

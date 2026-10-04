@@ -154,10 +154,10 @@ const quiz = {
     $('q-b').textContent = q.b;
     this.setFeedback('');
     this.draw();
-    $('qbox').classList.add('asking');
+    setAsking(true);
   },
   hide() {
-    $('qbox').classList.remove('asking');
+    setAsking(false);
     this.game = null;
   },
   active() { return !!(this.game && this.game.state === 'question'); },
@@ -182,7 +182,7 @@ const quiz = {
     if (res === null) return;
     if (res) {
       this.setFeedback('정답! 펑!', 'good');
-      setTimeout(() => { if (!this.active()) $('qbox').classList.remove('asking'); }, 450);
+      setTimeout(() => { if (!this.active()) setAsking(false); }, 450);
       this.game = null;
       return;
     }
@@ -329,7 +329,7 @@ class Match {
     const s = this.self.stats;
     const solved = s.correct + s.wrong;
     const rate = solved ? Math.round((s.correct / solved) * 100) : 0;
-    const html = `푼 문제 <b>${s.correct}</b>개 · 정답률 <b>${rate}%</b><br>최대 연쇄 <b>${s.maxChain}</b> · 보낸 방해 <b>${s.sent}</b>`;
+    const html = `푼 문제 <b>${s.correct}</b>개 · 정답률 <b>${rate}%</b><span class="lb"></span>최대 연쇄 <b>${s.maxChain}</b> · 보낸 방해 <b>${s.sent}</b>`;
     if (html !== this.lastStats) { $('mini-stats').innerHTML = html; this.lastStats = html; }
   }
 
@@ -418,15 +418,36 @@ function startLocal(mode, level) {
 }
 
 // 화면 크기에 맞게 게임판 확대/축소
+// 세로 화면(휴대폰·세로 태블릿)이면 보드는 위에, 곱셈 창과 조작 버튼은 아래 dock으로
+function isPortrait() {
+  return innerHeight > innerWidth * 1.15 && innerWidth <= 900;
+}
+
 function fitArena() {
   const arena = $('arena');
   const fit = $('arena-fit');
-  const touchH = document.body.classList.contains('touch') ? 84 : 0;
-  fit.style.bottom = `${touchH}px`;
+  const portrait = isPortrait();
+  document.body.classList.toggle('portrait', portrait);
+  const cc = $('center-col'), dock = $('dock'), tc = $('touch-controls');
+  if (portrait) {
+    if (cc.parentElement !== dock) dock.prepend(cc);
+    if (tc.parentElement !== dock) dock.appendChild(tc);
+  } else {
+    if (cc.parentElement !== arena) arena.insertBefore(cc, $('opp-area'));
+    if (tc.parentElement !== $('screen-game')) $('screen-game').insertBefore(tc, dock);
+  }
+  const bottom = portrait ? dock.offsetHeight : document.body.classList.contains('touch') ? 84 : 0;
+  fit.style.bottom = `${bottom}px`;
   arena.style.transform = 'none';
   const w = arena.offsetWidth, h = arena.offsetHeight;
-  const scale = Math.min((innerWidth - 8) / w, (innerHeight - touchH - 8) / h, 1.5);
+  const pad = portrait ? 4 : 8;
+  const scale = Math.min((innerWidth - pad) / w, (innerHeight - bottom - pad) / h, 1.5);
   arena.style.transform = `scale(${scale})`;
+}
+
+function setAsking(on) {
+  $('qbox').classList.toggle('asking', on);
+  document.body.classList.toggle('asking', on);
 }
 addEventListener('resize', () => { if (match) fitArena(); });
 
