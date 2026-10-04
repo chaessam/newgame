@@ -89,7 +89,7 @@ class Panel {
     this.view = view;
     this.cs = cs;
     const el = document.createElement('div');
-    el.className = `panel${self ? ' self' : ''}${cs < 36 ? ' small' : ''}${cs < 20 ? ' tiny' : ''}`;
+    el.className = `panel${self ? ' self' : ''}${cs < 36 ? ' small' : ''}${cs <= 20 ? ' tiny' : ''}`;
     el.innerHTML = `
       <div class="panel-head">
         <div class="panel-who"><span class="panel-school"></span><div class="panel-name"></div></div>
@@ -279,20 +279,23 @@ class Match {
     const portrait = isPortrait();
     this.portrait = portrait;
     $('self-slot').innerHTML = '';
-    $('opp-area').innerHTML = '';
+    // 상대 판만 지움 (세로 화면에서는 그만하기 버튼도 이 칸에 들어 있음)
+    $('opp-area').querySelectorAll('.panel').forEach((el) => el.remove());
     const mySchool = pickedSchool ? shortSchool(pickedSchool.name) : '';
     this.selfPanel = new Panel(this.self, { cs: 40, self: true, subtitle: '(나)', school: mySchool });
     $('self-slot').appendChild(this.selfPanel.el);
     const n = this.opps.length;
-    const ocs = portrait ? [26, 26, 21, 14][n] : [40, 40, 30, 24][n];
+    // 세로 화면에서는 상대 판을 작게 해서 내 판을 최대한 크게
+    const ocs = portrait ? [20, 20, 16, 12][n] : [40, 40, 30, 24][n];
+    const quit = $('btn-quit');
     this.oppPanels = this.opps.map((o) => {
       const p = new Panel(o.view, { cs: ocs, school: o.school });
-      $('opp-area').appendChild(p.el);
+      $('opp-area').insertBefore(p.el, quit.parentElement === $('opp-area') ? quit : null);
       return p;
     });
-    $('opp-area').style.display = n ? '' : 'none';
-    // 세로 화면에서 상대가 2명 이상이면 오른쪽에 세로로 쌓기
-    $('opp-area').classList.toggle('stack', portrait && n > 1);
+    // 세로 화면: 상대 판은 오른쪽에 세로로 쌓고, 그 아래 빈 곳에 그만하기 버튼
+    $('opp-area').style.display = n || portrait ? '' : 'none';
+    $('opp-area').classList.toggle('stack', portrait);
     this.render();
     requestAnimationFrame(fitArena);
   }
@@ -454,12 +457,15 @@ function fitArena() {
   // 화면을 돌려서 가로/세로가 바뀌면 판 크기를 다시 정함
   if (match && match.portrait !== portrait) { match.buildPanels(); return; }
   const cc = $('center-col'), dock = $('dock'), tc = $('touch-controls');
+  const quit = $('btn-quit');
   if (portrait) {
     if (cc.parentElement !== dock) dock.prepend(cc);
     if (tc.parentElement !== dock) dock.appendChild(tc);
+    if (quit.parentElement !== $('opp-area')) $('opp-area').appendChild(quit);
   } else {
     if (cc.parentElement !== arena) arena.insertBefore(cc, $('opp-area'));
     if (tc.parentElement !== $('screen-game')) $('screen-game').insertBefore(tc, dock);
+    if (quit.parentElement !== $('mini-row')) $('mini-row').appendChild(quit);
   }
   const bottom = portrait ? dock.offsetHeight : document.body.classList.contains('touch') ? 84 : 0;
   fit.style.bottom = `${bottom}px`;
