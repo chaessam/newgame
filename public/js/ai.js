@@ -15,9 +15,9 @@ export const LEVELS = {
     answerTime: [4.5, 7], wrongRate: 0.25,
   },
   hard: {
-    name: '고급', actionDelay: 0.18, think: 0.45, softDrop: true, depth: 1,
-    noise: 220, randomMove: 0.07, fireAt: 3, usePotential: true,
-    answerTime: [3, 5], wrongRate: 0.14,
+    name: '고급', actionDelay: 0.23, think: 0.5, softDrop: false, depth: 1,
+    noise: 280, randomMove: 0.1, fireAt: 3, usePotential: true,
+    answerTime: [3.2, 5.5], wrongRate: 0.17,
   },
 };
 
