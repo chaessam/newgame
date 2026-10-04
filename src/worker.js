@@ -398,7 +398,10 @@ export class GameRoom extends DurableObject {
     m.participants = ps.map(({ a: p }) => ({ id: p.id, school: p.school, nick: p.nick }));
     for (const p of ps) { p.a.alive = true; p.ws.serializeAttachment(p.a); }
     await this.save();
-    this.broadcast('start', { seed: m.seed, players: ps.map(({ a: p }) => ({ id: p.id, name: p.nick })) }, null, ps);
+    this.broadcast('start', {
+      seed: m.seed,
+      players: ps.map(({ a: p }) => ({ id: p.id, name: p.nick, school: shortSchool(p.schoolName) })),
+    }, null, ps);
     this.broadcast('room', { room: this.info(ps) }, null, ps);
     await this.syncLobby(ps);
   }
