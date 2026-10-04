@@ -2,6 +2,7 @@
 //
 // 방법 1) NEIS 교육정보 개방 포털 API (추천, https://open.neis.go.kr 에서 무료 인증키 발급)
 //   NEIS_API_KEY=발급받은키 node scripts/update-schools.mjs
+//   (프록시를 거치는 환경이면 NODE_USE_ENV_PROXY=1 을 앞에 붙이세요)
 //
 // 방법 2) 공공데이터포털 "전국초중등학교위치표준데이터" CSV 파일
 //   node scripts/update-schools.mjs --csv 내려받은파일.csv
@@ -47,12 +48,16 @@ async function fromNeis(key) {
     console.log(`  ${rows.length} / ${total}`);
     if (rows.length >= total || pageRows.length < 1000) break;
   }
-  return rows.map((r) => [
-    r.SD_SCHUL_CODE,
-    r.SCHUL_NM,
-    shortSido(r.LCTN_SC_NM || String(r.ORG_RDNMA || '').split(/\s+/)[0]),
-    sigunguOf(r.ORG_RDNMA),
-  ]);
+  const t = (v) => String(v ?? '').trim();
+  return rows
+    // 아직 문을 열지 않은 학교("(가칭)…", 학교 코드 없음)는 빼요.
+    .filter((r) => t(r.SD_SCHUL_CODE) && !t(r.SCHUL_NM).startsWith('(가칭)'))
+    .map((r) => [
+      t(r.SD_SCHUL_CODE),
+      t(r.SCHUL_NM),
+      shortSido(t(r.LCTN_SC_NM) || t(r.ORG_RDNMA).split(/\s+/)[0]),
+      sigunguOf(t(r.ORG_RDNMA)),
+    ]);
 }
 
 function parseCsv(text) {

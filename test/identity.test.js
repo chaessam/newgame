@@ -30,6 +30,8 @@ test('학교 이름/주소 다듬기', () => {
   assert.equal(shortSido('경기도'), '경기');
   assert.equal(shortSido('서울특별시'), '서울');
   assert.equal(shortSido('전북특별자치도'), '전북');
+  assert.equal(shortSido('전남광주통합특별시(광주)'), '광주');
+  assert.equal(shortSido('전남광주통합특별시(전남)'), '전남');
   assert.equal(sigunguOf('경기도 포천시 소흘읍 송우로 1'), '포천시');
   assert.equal(sigunguOf('경기도 수원시 장안구 정자로 1'), '수원시 장안구');
   assert.equal(sigunguOf('세종특별자치시 한누리대로 1'), '');

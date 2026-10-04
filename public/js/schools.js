@@ -14,6 +14,9 @@ const SIDO_SHORT = {
 };
 export function shortSido(name) {
   const s = String(name || '').trim();
+  // 통합된 시도는 괄호 안의 옛 지역 이름으로: "전남광주통합특별시(광주)" → "광주"
+  const merged = s.match(/통합특별시\((.+)\)$/);
+  if (merged) return merged[1];
   return SIDO_SHORT[s] || s.replace(/(특별자치시|특별자치도|특별시|광역시)$/, '');
 }
 
