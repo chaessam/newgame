@@ -158,7 +158,7 @@ const quiz = {
     void box.offsetWidth;
     box.classList.add('shake');
     $('keypad').classList.add('locked');
-    setTimeout(() => $('keypad').classList.remove('locked'), 1000);
+    setTimeout(() => $('keypad').classList.remove('locked'), 2000);
     if (q.tries >= 2) {
       const hint = q.b > 1
         ? `힌트: ${q.a} × ${q.b - 1} = ${q.a * (q.b - 1)} 에 ${q.a}를 더하면?`
@@ -228,7 +228,7 @@ class Match {
       return p;
     });
     $('opp-area').style.display = this.opps.length ? '' : 'none';
-    const label = this.mode === 'cpu' ? `컴퓨터 ${LEVELS[this.level].name}와 대결`
+    const label = this.mode === 'cpu' ? `컴퓨터 ${LEVELS[this.level].name}과 대결`
       : this.mode === 'solo' ? '혼자 연습' : `온라인 대결 · ${this.opps.length + 1}명`;
     $('mode-label').textContent = label;
     $('overlay-result').classList.remove('show');

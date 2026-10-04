@@ -10,7 +10,7 @@ const DROP_SPEED = 16;     // 칸/초, 착지 후 슬라임이 떨어지는 속�
 const SOFT_DROP_SPEED = 20;
 const LOCK_DELAY = 0.5;    // 바닥에 닿은 뒤 고정까지 시간
 const POP_TIME = 0.5;      // 터지는 연출 시간
-const WRONG_LOCKOUT = 1.0; // 오답 후 다시 입력할 수 있을 때까지 시간
+const WRONG_LOCKOUT = 2.0; // 오답 후 다시 입력할 수 있을 때까지 시간
 
 export class PlayerGame {
   constructor({ seed = 1, colors = 4, name = '', askQuestions = true } = {}) {

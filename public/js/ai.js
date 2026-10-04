@@ -1,21 +1,21 @@
-// 컴퓨터 상대 (초보 / 중수 / 고수)
+// 컴퓨터 상대 (초급 / 중급 / 고급)
 import { W, H, GARBAGE, SPAWN_X, ROT_OFFSETS, scoreStep } from './core.js';
 
 const N = W * H;
 
 export const LEVELS = {
   easy: {
-    name: '초보', actionDelay: 0.34, think: 0.6, softDrop: false, depth: 1,
+    name: '초급', actionDelay: 0.34, think: 0.6, softDrop: false, depth: 1,
     noise: 900, randomMove: 0.3, fireAt: 1, usePotential: false,
     answerTime: [4.5, 7.5], wrongRate: 0.3,
   },
   normal: {
-    name: '중수', actionDelay: 0.14, think: 0.3, softDrop: true, depth: 1,
+    name: '중급', actionDelay: 0.14, think: 0.3, softDrop: true, depth: 1,
     noise: 120, randomMove: 0.04, fireAt: 3, usePotential: true,
     answerTime: [2.6, 4.5], wrongRate: 0.12,
   },
   hard: {
-    name: '고수', actionDelay: 0.055, think: 0.12, softDrop: true, depth: 2,
+    name: '고급', actionDelay: 0.055, think: 0.12, softDrop: true, depth: 2,
     noise: 0, randomMove: 0, fireAt: 6, usePotential: true,
     answerTime: [1.4, 2.4], wrongRate: 0.03,
   },
