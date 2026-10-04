@@ -10,14 +10,14 @@ export const LEVELS = {
     answerTime: [4.5, 7.5], wrongRate: 0.3,
   },
   normal: {
-    name: '중급', actionDelay: 0.14, think: 0.3, softDrop: true, depth: 1,
-    noise: 120, randomMove: 0.04, fireAt: 3, usePotential: true,
-    answerTime: [2.6, 4.5], wrongRate: 0.12,
+    name: '중급', actionDelay: 0.24, think: 0.55, softDrop: true, depth: 1,
+    noise: 350, randomMove: 0.1, fireAt: 2, usePotential: true,
+    answerTime: [3.5, 6], wrongRate: 0.2,
   },
   hard: {
-    name: '고급', actionDelay: 0.055, think: 0.12, softDrop: true, depth: 2,
-    noise: 0, randomMove: 0, fireAt: 6, usePotential: true,
-    answerTime: [1.4, 2.4], wrongRate: 0.03,
+    name: '고급', actionDelay: 0.11, think: 0.3, softDrop: true, depth: 2,
+    noise: 80, randomMove: 0.03, fireAt: 4, usePotential: true,
+    answerTime: [2.2, 3.8], wrongRate: 0.08,
   },
 };
 
