@@ -709,3 +709,54 @@ body.portrait .panel-head { min-height: 0; }
 .panel.tiny .panel-score { font-size: 11px; letter-spacing: 0; }
 .panel.tiny .panel-qtag { font-size: 11px; padding: 3px 6px; }
 body.portrait .q-left { overflow: hidden; max-height: 100%; }
+
+/* ---------- 전체 화면 버튼 / 카카오톡 안내 ---------- */
+.menu-tools { display: flex; justify-content: flex-end; margin: -8px -6px 2px; min-height: 0; }
+.menu-tools .btn { font-size: 13px; padding: 6px 10px; }
+.menu-tools .btn[hidden] { display: none; }
+.inapp-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -6px 0 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(255, 228, 92, 0.12);
+  border: 1px solid var(--yellow);
+  color: #fff3b0;
+  font-size: 13px;
+  text-align: left;
+}
+.inapp-banner[hidden] { display: none; }
+.inapp-banner span { flex: 1; }
+.inapp-banner .btn { flex: 0 0 auto; font-size: 13px; padding: 7px 10px; }
+
+/* ---------- 만든 사람 표시 (메뉴 아래) ---------- */
+.maker {
+  margin-top: 16px;
+  padding: 12px 14px 13px;
+  border-radius: 16px;
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(rgba(23, 10, 60, 0.92), rgba(23, 10, 60, 0.92)) padding-box,
+    linear-gradient(90deg, var(--yellow), var(--pink), var(--cyan)) border-box;
+  box-shadow: 0 0 14px rgba(255, 228, 92, 0.25);
+}
+.maker-title { display: flex; align-items: baseline; justify-content: center; gap: 8px; }
+.maker-title span { font-size: 14px; color: var(--ink-soft); letter-spacing: 1px; }
+.maker-title b {
+  font-size: 26px;
+  font-weight: normal;
+  color: var(--yellow);
+  text-shadow: 0 0 10px rgba(255, 184, 0, 0.8), 0 0 22px rgba(255, 79, 216, 0.35);
+}
+.maker-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--cyan-soft);
+  text-decoration: none;
+  border-bottom: 1.5px solid rgba(79, 240, 255, 0.6);
+  padding-bottom: 1px;
+}
+.maker-link:hover, .maker-link:focus-visible { color: #fff; text-shadow: 0 0 8px var(--cyan); border-bottom-color: var(--cyan); }

@@ -15,6 +15,12 @@
   <!-- 메인 메뉴 -->
   <section id="screen-menu" class="screen active">
     <div class="menu-card">
+      <!-- 카카오톡 같은 앱 안에서 열렸을 때: 바깥 브라우저로 열면 화면이 더 넓어요 -->
+      <div class="inapp-banner" id="inapp-banner" hidden>
+        <span>카카오톡 안에서 열렸어요. 브라우저로 열면 화면이 더 넓어요.</span>
+        <button class="btn primary small" id="btn-open-external">브라우저로 열기</button>
+      </div>
+      <div class="menu-tools"><button class="btn soft small" id="btn-fullscreen" hidden>⛶ 전체 화면</button></div>
       <div class="logo-slimes" id="logo-slimes"></div>
       <h1 class="logo">구구팡 <span>슬라임</span></h1>
       <p class="subtitle">같은 색 4개를 모으고, 곱셈을 풀면 펑!</p>
@@ -44,6 +50,11 @@
         <button class="btn soft" id="btn-ranking">랭킹</button>
         <button class="btn soft" id="btn-solo">혼자 연습</button>
         <button class="btn soft" id="btn-howto">게임 방법</button>
+      </div>
+      <!-- 만든 사람 표시 -->
+      <div class="maker">
+        <div class="maker-title"><span>기획·제작</span><b>채쌤</b></div>
+        <a class="maker-link" href="https://blog.naver.com/ai_classroom" target="_blank" rel="noopener">AI 수업 아카이브 · 채쌤 블로그 ↗</a>
       </div>
     </div>
   </section>
