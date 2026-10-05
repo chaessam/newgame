@@ -281,6 +281,7 @@ export class PlayerGame {
       if (isBoardEmpty(this.board)) {
         this.allClearPending = true;
         this.addPopup('전체 클리어!', 'allclear');
+        this.emit('allclear');
       }
       this.emit('chainEnd', this.chain);
       this.chain = 0;

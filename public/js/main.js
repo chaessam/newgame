@@ -2,6 +2,7 @@ import { PlayerGame, RemoteView } from './player.js';
 import { CpuController, LEVELS } from './ai.js';
 import { drawBoard, drawNextPair, drawPending, drawDemoSlime, COLORS } from './render.js';
 import { Net } from './net.js';
+import { audio } from './audio.js';
 import { normalizeNick, identityError, nickError, MIN_GAMES_FOR_WINRATE } from './identity.js';
 import { hasProfanity } from './profanity.js';
 import { SCHOOLS_PATH, indexSchools, searchSchools, countSameName, shortSchool, placeOf } from './schools.js';
@@ -28,6 +29,7 @@ const SEND_INTERVAL = 0.2;
 
 function showScreen(name) {
   screen = name;
+  if (name !== 'game') audio.music('menu');
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === `screen-${name}`));
 }
 
@@ -218,8 +220,41 @@ $('keypad').addEventListener('pointerdown', (e) => {
   const b = e.target.closest('button');
   if (!b) return;
   e.preventDefault();
+  if (quiz.active()) audio.sfx('key');
   quiz.key(b.dataset.k);
 });
+
+// ---------------- 소리 ----------------
+
+// 브라우저는 화면을 한 번 누르거나 키를 눌러야 소리를 낼 수 있어요.
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => audio.unlock(), true);
+document.addEventListener('visibilitychange', () => audio.pause(document.hidden));
+// 버튼 누르는 소리 (키패드·조작 버튼은 따로 처리)
+document.addEventListener('click', (e) => { if (e.target.closest('.btn')) audio.sfx('click'); });
+
+function updateSoundButtons() {
+  const m = $('btn-music'), f = $('btn-sfx');
+  m.textContent = audio.musicOn ? '🎵 음악' : '🎵 음악 꺼짐';
+  f.textContent = audio.sfxOn ? '🔊 효과음' : '🔊 효과음 꺼짐';
+  m.classList.toggle('off', !audio.musicOn);
+  f.classList.toggle('off', !audio.sfxOn);
+  m.setAttribute('aria-pressed', String(audio.musicOn));
+  f.setAttribute('aria-pressed', String(audio.sfxOn));
+  const anyOn = audio.musicOn || audio.sfxOn;
+  $('btn-mute').textContent = anyOn ? '🔊' : '🔇';
+  $('btn-mute').classList.toggle('off', !anyOn);
+}
+$('btn-music').onclick = () => { audio.unlock(); audio.setMusic(!audio.musicOn); updateSoundButtons(); };
+$('btn-sfx').onclick = () => { audio.setSfx(!audio.sfxOn); updateSoundButtons(); };
+// 게임 중: 음악·효과음을 한 번에 켜고 끄기
+$('btn-mute').onclick = () => {
+  const on = !(audio.musicOn || audio.sfxOn);
+  audio.setSfx(on);
+  audio.setMusic(on);
+  updateSoundButtons();
+};
+updateSoundButtons();
+audio.music('menu');
 
 // ---------------- 한 판 진행 ----------------
 
@@ -237,14 +272,21 @@ class Match {
 
     const self = new PlayerGame({ seed: this.seed, name: myName || '나' });
     this.self = self;
-    self.on('question', () => quiz.show(self));
+    self.on('question', () => { quiz.show(self); audio.sfx('question'); });
     self.on('dead', () => this.onSelfDead());
+    self.on('lock', () => audio.sfx('land'));
+    self.on('correct', () => audio.sfx('correct'));
+    self.on('wrong', () => audio.sfx('wrong'));
+    self.on('chain', (e) => audio.sfx('pop', e.chain));
+    self.on('attack', () => audio.sfx('attack'));
+    self.on('garbage', () => audio.sfx('garbage'));
+    self.on('allclear', () => audio.sfx('allclear'));
 
     if (mode === 'cpu') {
       const lv = LEVELS[level];
       const g = new PlayerGame({ seed: this.seed, name: `${lv.name} 로봇` });
       const ctrl = new CpuController(g, level, () => self.pendingIn);
-      g.on('attack', (n) => self.receiveGarbage(n));
+      g.on('attack', (n) => { self.receiveGarbage(n); audio.sfx('incoming'); });
       self.on('attack', (n) => g.receiveGarbage(n));
       g.on('dead', () => { if (!self.isDead) this.finish(true); });
       this.opps.push({ id: 'cpu', game: g, view: g, ctrl, school: '컴퓨터' });
@@ -289,7 +331,7 @@ class Match {
     const n = this.opps.length;
     // 세로 화면에서는 상대 판을 작게 해서 내 판을 최대한 크게
     const ocs = portrait ? [15, 15, 13, 10][n] : [40, 40, 30, 24][n];
-    const quit = $('btn-quit');
+    const quit = $('game-tools');
     this.oppPanels = this.opps.map((o) => {
       const p = new Panel(o.view, { cs: ocs, school: o.school });
       $('opp-area').insertBefore(p.el, quit.parentElement === $('opp-area') ? quit : null);
@@ -303,6 +345,7 @@ class Match {
   }
 
   start() {
+    audio.music('battle');
     this.self.start();
     for (const o of this.opps) if (o.game) o.game.start();
   }
@@ -315,6 +358,7 @@ class Match {
       const text = n > 0 ? String(n) : '시작!';
       if (text !== this.lastCount) {
         this.lastCount = text;
+        audio.sfx(n > 0 ? 'count' : 'go');
         const el = $('countdown-text');
         el.textContent = text;
         el.style.animation = 'none';
@@ -366,6 +410,10 @@ class Match {
     if (this.mode === 'online') {
       roomNet.send('state', { s: this.self.snapshot() });
       roomNet.send('dead');
+      // 탈락: 음악을 멈추고, 결과가 나오면 승패 소리는 다시 내지 않음
+      audio.music(null);
+      audio.sfx('lose');
+      this.endSoundPlayed = true;
       if (!this.over) toast('탈락! 다른 친구들의 게임이 끝날 때까지 지켜봐요.');
       return;
     }
@@ -387,6 +435,7 @@ class Match {
     if (this.mode === 'online' || this.over || this.countdown > 0) return;
     this.paused = !this.paused;
     $('overlay-pause').classList.toggle('show', this.paused);
+    audio.music(this.paused ? null : 'battle');
     if (!this.paused) input.reset();
   }
 
@@ -395,6 +444,8 @@ class Match {
     if (this.over) return;
     this.over = true;
     quiz.hide();
+    audio.music(null);
+    if (!this.endSoundPlayed) audio.sfx(win ? 'win' : 'lose');
     const s = this.self.stats;
     const solved = s.correct + s.wrong;
     const rate = solved ? Math.round((s.correct / solved) * 100) : 0;
@@ -500,7 +551,7 @@ function fitArena() {
   // 화면을 돌려서 가로/세로가 바뀌면 판 크기를 다시 정함
   if (match && match.portrait !== portrait) { match.buildPanels(); return; }
   const cc = $('center-col'), dock = $('dock'), tc = $('touch-controls');
-  const quit = $('btn-quit');
+  const quit = $('game-tools');
   if (portrait) {
     if (cc.parentElement !== dock) dock.prepend(cc);
     if (tc.parentElement !== dock) dock.appendChild(tc);
@@ -553,7 +604,7 @@ const input = {
     const g = this.game();
     this.held.add(dir);
     this.dir = dir; this.t = 0; this.rep = 0;
-    if (g) g.move(dir);
+    if (g && g.move(dir)) audio.sfx('move');
   },
   release(dir) {
     this.held.delete(dir);
@@ -562,7 +613,7 @@ const input = {
       this.t = 0; this.rep = 0;
     }
   },
-  rotate(d) { const g = this.game(); if (g) g.rotate(d); },
+  rotate(d) { const g = this.game(); if (g && g.rotate(d)) audio.sfx('rotate'); },
   soft(on) { const g = this.game(); if (g) g.setSoftDrop(on); else if (match) match.self.setSoftDrop(false); },
   update(dt) {
     const g = this.game();
@@ -1058,7 +1109,11 @@ roomNet.on('start', (m) => {
   match = new Match({ mode: 'online', seed: m.seed, players: m.players });
 });
 roomNet.on('state', (m) => { if (match && match.mode === 'online') match.remoteState(m.id, m.s); });
-roomNet.on('attack', (m) => { if (match && match.mode === 'online' && !match.over) match.self.receiveGarbage(m.n); });
+roomNet.on('attack', (m) => {
+  if (!match || match.mode !== 'online' || match.over) return;
+  match.self.receiveGarbage(m.n);
+  audio.sfx('incoming');
+});
 roomNet.on('playerDead', (m) => { if (match && match.mode === 'online') match.remoteDead(m.id); });
 roomNet.on('gameOver', (m) => {
   if (!match || match.mode !== 'online') return;

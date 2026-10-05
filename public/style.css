@@ -701,7 +701,7 @@ body.portrait .panel-head { min-height: 0; }
 body.portrait .q-left { overflow: hidden; max-height: 100%; }
 
 /* ---------- 전체 화면 버튼 / 카카오톡 안내 ---------- */
-.menu-tools { display: flex; justify-content: flex-end; margin: -8px -6px 2px; min-height: 0; }
+.menu-tools { display: flex; justify-content: flex-end; margin: -8px -6px 12px; min-height: 0; }
 .menu-tools .btn { font-size: 13px; padding: 6px 10px; }
 .menu-tools .btn[hidden] { display: none; }
 .inapp-banner {
@@ -756,3 +756,10 @@ body.portrait .q-left { overflow: hidden; max-height: 100%; }
 body.portrait .dock-quit:not(:empty) { display: flex; justify-content: flex-end; }
 body.portrait.asking .dock-quit { display: none; }
 body.portrait .dock-quit .btn { font-size: 14px; padding: 6px 14px; }
+
+/* ---------- 소리 켜기/끄기 ---------- */
+.menu-tools { gap: 6px; flex-wrap: wrap; }
+.sound-toggle.off, #btn-mute.off { opacity: 0.5; border-style: dashed; }
+.game-tools { display: flex; gap: 8px; }
+.game-tools #btn-quit { flex: 1; }
+.game-tools #btn-mute { flex: 0 0 auto; }
