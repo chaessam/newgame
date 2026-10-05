@@ -296,7 +296,7 @@ class Match {
       return p;
     });
     // 세로 화면: 상대 판은 오른쪽에 세로로 쌓고, 그 아래 빈 곳에 그만하기 버튼
-    $('opp-area').style.display = n || portrait ? '' : 'none';
+    $('opp-area').style.display = n ? '' : 'none';
     $('opp-area').classList.toggle('stack', portrait);
     this.render();
     requestAnimationFrame(fitArena);
@@ -504,7 +504,10 @@ function fitArena() {
   if (portrait) {
     if (cc.parentElement !== dock) dock.prepend(cc);
     if (tc.parentElement !== dock) dock.appendChild(tc);
-    if (quit.parentElement !== $('opp-area')) $('opp-area').appendChild(quit);
+    // 상대가 있으면 상대 판 아래, 혼자 연습이면 조작 버튼 바로 위 오른쪽
+    const solo = !match || !match.opps.length;
+    const quitHome = solo ? $('dock-quit') : $('opp-area');
+    if (quit.parentElement !== quitHome) quitHome.appendChild(quit);
   } else {
     if (cc.parentElement !== arena) arena.insertBefore(cc, $('opp-area'));
     if (tc.parentElement !== $('screen-game')) $('screen-game').insertBefore(tc, dock);
@@ -514,20 +517,17 @@ function fitArena() {
   const w = arena.offsetWidth, h = arena.offsetHeight;
   if (portrait) {
     // 판은 위쪽에 최대한 크게, 남는 높이는 모두 아래 칸(조작 버튼·키패드)에 줌.
-    // 키가 큰 화면은 숫자 3개씩 4줄 키패드가 들어갈 만큼 아래 칸을 남기고,
-    // 그보다 짧은 화면은 판을 우선해서 아래 칸을 줄임(키패드는 4칸 × 3줄).
+    // 아래 칸은 숫자 3개씩 4줄 키패드(1 2 3 / 4 5 6 / 7 8 9 / 지우기 0 확인)가 들어갈 만큼 남김.
     const pad = 4;
-    const minDock = innerHeight >= 820 ? 190 : 140;
+    const minDock = innerHeight >= 700 ? 190 : 170;
     const scale = Math.min((innerWidth - pad) / w, (innerHeight - minDock - pad) / h, 1.5);
     const dockH = Math.max(minDock, Math.floor(innerHeight - h * scale - pad));
     dock.style.height = `${dockH}px`;
     fit.style.bottom = `${dockH}px`;
-    document.body.classList.toggle('dock-tall', dockH >= 190);
     arena.style.transform = `scale(${scale})`;
     return;
   }
   dock.style.height = '';
-  document.body.classList.remove('dock-tall');
   const bottom = document.body.classList.contains('touch') ? 84 : 0;
   fit.style.bottom = `${bottom}px`;
   const pad = 8;
