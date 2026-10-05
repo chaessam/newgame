@@ -129,8 +129,10 @@ class Panel {
     const nk = v.nextPairs ? JSON.stringify(v.nextPairs) : '';
     if (nk !== this.lastNextKey) {
       const pairs = v.nextPairs || [];
-      drawNextPair(this.next1, pairs[0], Math.round(cs * 0.75));
-      drawNextPair(this.next2, pairs[1], Math.round(cs * 0.55));
+      // 세로 화면에서는 다음 슬라임 상자를 작게 해서 판 위쪽 공간을 줄임
+      const k = document.body.classList.contains('portrait') ? 0.8 : 1;
+      drawNextPair(this.next1, pairs[0], Math.round(cs * 0.75 * k));
+      drawNextPair(this.next2, pairs[1], Math.round(cs * 0.55 * k));
       this.lastNextKey = nk;
     }
     if (v.pendingIn !== this.lastPending) {
@@ -286,7 +288,7 @@ class Match {
     $('self-slot').appendChild(this.selfPanel.el);
     const n = this.opps.length;
     // 세로 화면에서는 상대 판을 작게 해서 내 판을 최대한 크게
-    const ocs = portrait ? [20, 20, 16, 12][n] : [40, 40, 30, 24][n];
+    const ocs = portrait ? [15, 15, 13, 10][n] : [40, 40, 30, 24][n];
     const quit = $('btn-quit');
     this.oppPanels = this.opps.map((o) => {
       const p = new Panel(o.view, { cs: ocs, school: o.school });
@@ -508,11 +510,27 @@ function fitArena() {
     if (tc.parentElement !== $('screen-game')) $('screen-game').insertBefore(tc, dock);
     if (quit.parentElement !== $('mini-row')) $('mini-row').appendChild(quit);
   }
-  const bottom = portrait ? dock.offsetHeight : document.body.classList.contains('touch') ? 84 : 0;
-  fit.style.bottom = `${bottom}px`;
   arena.style.transform = 'none';
   const w = arena.offsetWidth, h = arena.offsetHeight;
-  const pad = portrait ? 4 : 8;
+  if (portrait) {
+    // 판은 위쪽에 최대한 크게, 남는 높이는 모두 아래 칸(조작 버튼·키패드)에 줌.
+    // 키가 큰 화면은 숫자 3개씩 4줄 키패드가 들어갈 만큼 아래 칸을 남기고,
+    // 그보다 짧은 화면은 판을 우선해서 아래 칸을 줄임(키패드는 4칸 × 3줄).
+    const pad = 4;
+    const minDock = innerHeight >= 820 ? 190 : 140;
+    const scale = Math.min((innerWidth - pad) / w, (innerHeight - minDock - pad) / h, 1.5);
+    const dockH = Math.max(minDock, Math.floor(innerHeight - h * scale - pad));
+    dock.style.height = `${dockH}px`;
+    fit.style.bottom = `${dockH}px`;
+    document.body.classList.toggle('dock-tall', dockH >= 190);
+    arena.style.transform = `scale(${scale})`;
+    return;
+  }
+  dock.style.height = '';
+  document.body.classList.remove('dock-tall');
+  const bottom = document.body.classList.contains('touch') ? 84 : 0;
+  fit.style.bottom = `${bottom}px`;
+  const pad = 8;
   const scale = Math.min((innerWidth - pad) / w, (innerHeight - bottom - pad) / h, 1.5);
   arena.style.transform = `scale(${scale})`;
 }
