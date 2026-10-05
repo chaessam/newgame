@@ -20,7 +20,11 @@
         <span>카카오톡 안에서 열렸어요. 브라우저로 열면 화면이 더 넓어요.</span>
         <button class="btn primary small" id="btn-open-external">브라우저로 열기</button>
       </div>
-      <div class="menu-tools"><button class="btn soft small" id="btn-fullscreen" hidden>⛶ 전체 화면</button></div>
+      <div class="menu-tools">
+        <button class="btn soft small sound-toggle" id="btn-music" aria-pressed="true">🎵 음악</button>
+        <button class="btn soft small sound-toggle" id="btn-sfx" aria-pressed="true">🔊 효과음</button>
+        <button class="btn soft small" id="btn-fullscreen" hidden>⛶ 전체 화면</button>
+      </div>
       <div class="logo-slimes" id="logo-slimes"></div>
       <h1 class="logo">구구팡 <span>슬라임</span></h1>
       <p class="subtitle">같은 색 4개를 모으고, 곱셈을 풀면 펑!</p>
@@ -165,7 +169,10 @@
           </div>
           <div class="mini-row" id="mini-row">
             <div class="mini-stats" id="mini-stats"></div>
-            <button class="btn soft small" id="btn-quit">그만하기</button>
+            <div class="game-tools" id="game-tools">
+              <button class="btn soft small" id="btn-mute" aria-label="소리 켜기/끄기">🔊</button>
+              <button class="btn soft small" id="btn-quit">그만하기</button>
+            </div>
           </div>
         </div>
         <div class="opp-area" id="opp-area"></div>
