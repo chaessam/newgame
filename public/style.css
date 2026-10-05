@@ -668,26 +668,12 @@ body.portrait .q-expr { font-size: 30px; margin: 0; white-space: nowrap; }
 body.portrait .q-input { display: block; width: 78%; margin: 2px auto 0; min-height: 38px; }
 body.portrait .q-feedback { min-height: 0; margin-top: 6px; font-size: 13px; }
 body.portrait .q-feedback.good { font-size: 18px; }
-/* 아래 칸이 좁으면 키패드 4칸 × 3줄: 1 2 3 지우기 / 4 5 6 0 / 7 8 9 확인 */
 body.portrait .qbox.asking .q-active { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr); }
-body.portrait .keypad { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr); gap: 5px; height: 100%; }
-/* 아래 칸이 넉넉하면: 1 2 3 / 4 5 6 / 7 8 9 / 지우기 0 확인 */
-body.portrait.dock-tall .keypad { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); }
-body.portrait.dock-tall .qbox.asking .q-active { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); }
-body.portrait.dock-tall .q-expr { font-size: 34px; }
+/* 키패드: 1 2 3 / 4 5 6 / 7 8 9 / 지우기 0 확인 (전화 다이얼 순서) */
+body.portrait .keypad { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); gap: 5px; height: 100%; }
+body.portrait .qbox.asking .q-active { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); }
+body.portrait .q-expr { font-size: 34px; }
 body.portrait .keypad button { font-size: 22px; padding: 0; }
-body.portrait:not(.dock-tall) .keypad [data-k="7"] { grid-area: 3 / 1; }
-body.portrait:not(.dock-tall) .keypad [data-k="8"] { grid-area: 3 / 2; }
-body.portrait:not(.dock-tall) .keypad [data-k="9"] { grid-area: 3 / 3; }
-body.portrait:not(.dock-tall) .keypad [data-k="del"] { grid-area: 1 / 4; }
-body.portrait:not(.dock-tall) .keypad [data-k="4"] { grid-area: 2 / 1; }
-body.portrait:not(.dock-tall) .keypad [data-k="5"] { grid-area: 2 / 2; }
-body.portrait:not(.dock-tall) .keypad [data-k="6"] { grid-area: 2 / 3; }
-body.portrait:not(.dock-tall) .keypad [data-k="0"] { grid-area: 2 / 4; }
-body.portrait:not(.dock-tall) .keypad [data-k="1"] { grid-area: 1 / 1; }
-body.portrait:not(.dock-tall) .keypad [data-k="2"] { grid-area: 1 / 2; }
-body.portrait:not(.dock-tall) .keypad [data-k="3"] { grid-area: 1 / 3; }
-body.portrait:not(.dock-tall) .keypad [data-k="ok"] { grid-area: 3 / 4; }
 body.portrait .keypad .k-del { font-size: 14px; }
 body.portrait .keypad .k-ok { font-size: 16px; }
 @media (max-height: 640px) {
@@ -764,3 +750,9 @@ body.portrait .q-left { overflow: hidden; max-height: 100%; }
   padding-bottom: 1px;
 }
 .maker-link:hover, .maker-link:focus-visible { color: #fff; text-shadow: 0 0 8px var(--cyan); border-bottom-color: var(--cyan); }
+
+/* 혼자 연습(세로 화면): 그만하기는 조작 버튼 바로 위 오른쪽 */
+.dock-quit { display: none; }
+body.portrait .dock-quit:not(:empty) { display: flex; justify-content: flex-end; }
+body.portrait.asking .dock-quit { display: none; }
+body.portrait .dock-quit .btn { font-size: 14px; padding: 6px 14px; }

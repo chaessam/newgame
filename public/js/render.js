@@ -125,6 +125,36 @@ function drawStars(ctx, w, h, cs) {
   }
 }
 
+// 게임 오버 칸(왼쪽에서 세 번째 줄 맨 위) 경고.
+// 평소에는 아무것도 그리지 않고, 그 줄이 거의 다 찼을 때만 빨갛게 깜빡이며 알려 줍니다.
+function drawDanger(ctx, board, cs, pad, t) {
+  let top = 0; // 그 줄에서 가장 위에 있는 슬라임의 행 (0이면 비어 있음)
+  for (let y = 1; y < board.length; y++) if (board[y][SPAWN_X]) { top = y; break; }
+  if (!top || top > 4) return;
+  const level = top <= 2 ? 1 : 0.6; // 한 칸 남았으면 더 강하게
+  const pulse = 0.5 + 0.5 * Math.sin(t * (top <= 2 ? 12 : 7));
+  const x = SPAWN_X * cs, y = pad;
+  ctx.save();
+  const g = ctx.createLinearGradient(0, y, 0, y + cs * 1.6);
+  g.addColorStop(0, `rgba(255, 60, 90, ${(0.35 + 0.35 * pulse) * level})`);
+  g.addColorStop(1, 'rgba(255, 60, 90, 0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, 0, cs, y + cs * 1.6);
+  ctx.strokeStyle = `rgba(255, 90, 120, ${(0.55 + 0.45 * pulse) * level})`;
+  ctx.lineWidth = cs * 0.08;
+  ctx.shadowColor = 'rgba(255, 60, 90, 0.9)';
+  ctx.shadowBlur = cs * 0.4 * pulse;
+  roundRect(ctx, x + cs * 0.08, y + cs * 0.08, cs * 0.84, cs * 0.84, cs * 0.25);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.font = `${Math.round(cs * 0.62)}px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = `rgba(255, 235, 240, ${0.6 + 0.4 * pulse})`;
+  ctx.fillText('!', x + cs / 2, y + cs * 0.52);
+  ctx.restore();
+}
+
 // 보드 캔버스 크기를 맞춥니다.
 export function sizeCanvas(canvas, w, h) {
   const s = dpr();
@@ -160,15 +190,6 @@ export function drawBoard(canvas, view, cs) {
   for (let x = 1; x < W; x++) {
     ctx.beginPath(); ctx.moveTo(x * cs + 0.5, 0); ctx.lineTo(x * cs + 0.5, bh); ctx.stroke();
   }
-  // 이 칸이 차면 게임 오버
-  ctx.strokeStyle = 'rgba(255,90,110,0.45)';
-  ctx.lineWidth = cs * 0.08;
-  ctx.lineCap = 'round';
-  const xx = SPAWN_X * cs, m = cs * 0.28;
-  ctx.beginPath();
-  ctx.moveTo(xx + m, pad + m); ctx.lineTo(xx + cs - m, pad + cs - m);
-  ctx.moveTo(xx + cs - m, pad + m); ctx.lineTo(xx + m, pad + cs - m);
-  ctx.stroke();
 
   const rowY = (y) => (y - 1) * cs + pad;
   const b = view.board;
@@ -222,6 +243,8 @@ export function drawBoard(canvas, view, cs) {
     ctx.stroke();
     ctx.restore();
   }
+
+  drawDanger(ctx, view.board, cs, pad, t);
 
   // 연쇄 글자
   for (const pop of view.popups || []) {
