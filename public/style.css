@@ -709,3 +709,24 @@ body.portrait .panel-head { min-height: 0; }
 .panel.tiny .panel-score { font-size: 11px; letter-spacing: 0; }
 .panel.tiny .panel-qtag { font-size: 11px; padding: 3px 6px; }
 body.portrait .q-left { overflow: hidden; max-height: 100%; }
+
+/* ---------- 전체 화면 버튼 / 카카오톡 안내 ---------- */
+.menu-tools { display: flex; justify-content: flex-end; margin: -8px -6px 2px; min-height: 0; }
+.menu-tools .btn { font-size: 13px; padding: 6px 10px; }
+.menu-tools .btn[hidden] { display: none; }
+.inapp-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -6px 0 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(255, 228, 92, 0.12);
+  border: 1px solid var(--yellow);
+  color: #fff3b0;
+  font-size: 13px;
+  text-align: left;
+}
+.inapp-banner[hidden] { display: none; }
+.inapp-banner span { flex: 1; }
+.inapp-banner .btn { flex: 0 0 auto; font-size: 13px; padding: 7px 10px; }

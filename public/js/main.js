@@ -437,6 +437,47 @@ function endMatch() {
   ['overlay-result', 'overlay-pause', 'overlay-countdown'].forEach((id) => $(id).classList.remove('show'));
 }
 
+// ---------------- 휴대폰 전체 화면 (주소창 숨기기) ----------------
+// 안드로이드 브라우저는 버튼을 누를 때 전체 화면으로 바꿀 수 있어요. (아이폰 사파리는 지원하지 않음)
+const fsTarget = document.documentElement;
+const canFullscreen = !!(fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen);
+const inKakao = /KAKAOTALK/i.test(navigator.userAgent);
+const isFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+function enterFullscreen() {
+  if (!document.body.classList.contains('touch') || !canFullscreen || isFullscreen()) return;
+  try {
+    const req = fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen;
+    const p = req.call(fsTarget, { navigationUI: 'hide' });
+    if (p && p.catch) p.catch(() => {});
+  } catch { /* 지원하지 않으면 그냥 넘어감 */ }
+}
+
+function exitFullscreen() {
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  try {
+    const p = exit && exit.call(document);
+    if (p && p.catch) p.catch(() => {});
+  } catch { /* 무시 */ }
+}
+
+function updateFullscreenButton() {
+  const b = $('btn-fullscreen');
+  b.hidden = !(document.body.classList.contains('touch') && canFullscreen);
+  b.textContent = isFullscreen() ? '⛶ 전체 화면 끄기' : '⛶ 전체 화면';
+}
+$('btn-fullscreen').onclick = () => (isFullscreen() ? exitFullscreen() : enterFullscreen());
+document.addEventListener('fullscreenchange', updateFullscreenButton);
+document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+updateFullscreenButton();
+
+if (inKakao) {
+  $('inapp-banner').hidden = false;
+  $('btn-open-external').onclick = () => {
+    location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(location.href)}`;
+  };
+}
+
 function startLocal(mode, level) {
   endMatch();
   showScreen('game');
@@ -696,10 +737,11 @@ schoolUi.showPicked();
 document.querySelectorAll('[data-cpu]').forEach((b) => {
   b.addEventListener('click', () => {
     if (!readIdentity(false)) return;
+    enterFullscreen();
     startLocal('cpu', b.dataset.cpu);
   });
 });
-$('btn-solo').onclick = () => { if (readIdentity(false)) startLocal('solo'); };
+$('btn-solo').onclick = () => { if (readIdentity(false)) { enterFullscreen(); startLocal('solo'); } };
 $('btn-howto').onclick = () => showScreen('howto');
 $('btn-ranking').onclick = () => { saveIdentity(); showScreen('ranking'); loadRanking(rankType); };
 document.querySelectorAll('[data-back]').forEach((b) => {
@@ -874,7 +916,7 @@ async function joinRoom(roomId) {
   }
 }
 
-$('btn-online').onclick = () => { if (readIdentity(true)) enterLobby(); };
+$('btn-online').onclick = () => { if (readIdentity(true)) { enterFullscreen(); enterLobby(); } };
 
 $('btn-create-room').onclick = () => {
   if (!lobbyNet.connected) return toast('서버에 연결되어 있지 않아요.');
