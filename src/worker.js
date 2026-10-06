@@ -104,7 +104,12 @@ export class Lobby extends DurableObject {
       CREATE TABLE IF NOT EXISTS rooms (
         id TEXT PRIMARY KEY, title TEXT, host TEXT, count INTEGER, max INTEGER, status TEXT, updated INTEGER
       );
+      CREATE TABLE IF NOT EXISTS participants (
+        school TEXT NOT NULL, nick TEXT NOT NULL, PRIMARY KEY (school, nick)
+      );
+      CREATE TABLE IF NOT EXISTS counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL DEFAULT 0);
     `);
+    this.seedCounters();
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
 
@@ -112,6 +117,12 @@ export class Lobby extends DurableObject {
     const url = new URL(request.url);
     const q = url.searchParams;
     if (url.pathname === '/ws/lobby') return acceptSocket(this.ctx, request);
+    if (url.pathname === '/api/stats') return json(this.stats());
+    if (url.pathname === '/api/played' && request.method === 'POST') {
+      let body = {};
+      try { body = await request.json(); } catch { /* 빈 요청 */ }
+      return json(await this.played(body));
+    }
     if (url.pathname === '/api/rank') return json(await this.ranking(q.get('type')));
     if (url.pathname === '/api/me') return json(await this.me(q.get('school'), q.get('nick')));
     return json({ error: 'not found' }, 404);
@@ -178,10 +189,69 @@ export class Lobby extends DurableObject {
 
   // --- 랭킹
 
+  // ---- 첫 화면 통계: 참여 학교 수, 참여 학생 수, 누적 대결 수 ----
+  // 매번 세면 무료 한도(읽는 줄 수)를 많이 쓰니, 숫자를 따로 저장해 두고 1씩 올립니다.
+
+  bump(name, n = 1) {
+    this.sql.exec(
+      'INSERT INTO counters (name, value) VALUES (?, ?) ON CONFLICT (name) DO UPDATE SET value = value + excluded.value',
+      name, n,
+    );
+  }
+
+  counter(name) {
+    const row = this.sql.exec('SELECT value FROM counters WHERE name = ?', name).toArray()[0];
+    return row ? row.value : 0;
+  }
+
+  // 학생을 처음 보면 학생 수(+학교도 처음이면 학교 수)를 올림
+  addParticipant(school, nick) {
+    const schoolSeen = this.sql.exec('SELECT 1 FROM participants WHERE school = ? LIMIT 1', school).toArray().length > 0;
+    const cur = this.sql.exec('INSERT OR IGNORE INTO participants (school, nick) VALUES (?, ?)', school, nick);
+    if (cur.rowsWritten > 0) {
+      this.bump('students');
+      if (!schoolSeen) this.bump('schools');
+    }
+  }
+
+  // 통계 기능을 넣기 전의 온라인 대결 기록으로 처음 한 번 숫자를 채움
+  seedCounters() {
+    if (this.counter('seeded')) return;
+    for (const p of this.sql.exec('SELECT school, nick FROM players').toArray()) this.addParticipant(p.school, p.nick);
+    const g = this.sql.exec('SELECT COALESCE(SUM(games), 0) AS g FROM players').one().g;
+    if (g) this.bump('online', Math.round(g / 2)); // 대부분 2명 대결이라 반으로 어림
+    this.bump('seeded');
+  }
+
+  stats() {
+    if (this.statsCache && Date.now() - this.statsCache.t < RANK_CACHE_MS) return this.statsCache.data;
+    const data = {
+      schools: this.counter('schools'),
+      students: this.counter('students'),
+      games: this.counter('online') + this.counter('cpu') + this.counter('solo'),
+    };
+    this.statsCache = { t: Date.now(), data };
+    return data;
+  }
+
+  // 컴퓨터 대결·혼자 연습 한 판이 끝날 때 (학교를 골랐으면 참여 학생으로도 셈)
+  async played({ mode, schoolCode, nick }) {
+    if (mode !== 'cpu' && mode !== 'solo') return { ok: false };
+    this.bump(mode);
+    if (schoolCode && nick) {
+      const id = await checkIdentity(this.env, schoolCode, nick);
+      if (!id.error) this.addParticipant(id.school.code, id.nick);
+    }
+    this.statsCache = null;
+    return { ok: true };
+  }
+
   // results: [{ school: 학교코드, nick, win }]  (GameRoom이 확인한 값)
   recordResult(results) {
     const now = Date.now();
+    this.bump('online');
     for (const p of results) {
+      this.addParticipant(p.school, p.nick);
       const win = p.win ? 1 : 0;
       const existed = this.sql.exec(
         'SELECT 1 FROM players WHERE school = ? AND nick = ?', p.school, p.nick,
@@ -198,6 +268,7 @@ export class Lobby extends DurableObject {
       );
     }
     this.cache.clear();
+    this.statsCache = null;
   }
 
   async ranking(type) {
