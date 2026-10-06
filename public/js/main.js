@@ -30,6 +30,7 @@ const SEND_INTERVAL = 0.2;
 function showScreen(name) {
   screen = name;
   if (name !== 'game') audio.music('menu');
+  if (name === 'menu') loadStats();
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === `screen-${name}`));
 }
 
@@ -454,6 +455,7 @@ class Match {
       ? '구구단 실력이 쑥쑥 자라고 있어요.'
       : win ? '곱셈 연쇄 최고!'
         : winnerName ? `${winnerName} 친구가 이겼어요. 다시 도전해 봐요!` : '다시 도전해 봐요!';
+    if (this.mode !== 'online') reportPlayed(this.mode, this.self.time);
     if (this.mode === 'online') {
       $('result-sub').textContent += recorded ? ' (랭킹에 기록됐어요)' : ' (30초보다 짧은 판은 랭킹에 기록되지 않아요)';
       if (recorded) setTimeout(refreshMyRecord, 800);
@@ -876,6 +878,42 @@ $('name-input').addEventListener('input', () => {
   recordTimer = setTimeout(() => { saveIdentity(); refreshMyRecord(); }, 500);
 });
 refreshMyRecord();
+
+// ---------------- 첫 화면 통계 ----------------
+
+let statsLoadedAt = 0;
+async function loadStats() {
+  if (Date.now() - statsLoadedAt < 60000) return; // 1분에 한 번만 (무료 한도 아끼기)
+  statsLoadedAt = Date.now();
+  try {
+    const res = await fetch('/api/stats');
+    if (!res.ok) throw new Error();
+    const r = await res.json();
+    if (!r.schools && !r.games) return;
+    $('stat-schools').textContent = r.schools.toLocaleString('ko-KR');
+    $('stat-students').textContent = r.students.toLocaleString('ko-KR');
+    $('stat-games').textContent = r.games.toLocaleString('ko-KR');
+    $('play-stats').hidden = false;
+  } catch {
+    statsLoadedAt = 0;
+  }
+}
+loadStats();
+
+// 컴퓨터 대결·혼자 연습 한 판을 누적 대결 수에 더함 (너무 짧은 판은 빼요)
+function reportPlayed(mode, seconds) {
+  if (seconds < 20) return;
+  const id = identity();
+  const body = { mode };
+  if (!identityError(id)) { body.schoolCode = id.schoolCode; body.nick = id.nick; }
+  statsLoadedAt = 0; // 메뉴로 돌아가면 바로 새 숫자를 보여 줌
+  fetch('/api/played', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    keepalive: true,
+  }).catch(() => {});
+}
 
 // ---------------- 랭킹 ----------------
 

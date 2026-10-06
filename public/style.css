@@ -721,6 +721,37 @@ body.portrait .q-left { overflow: hidden; max-height: 100%; }
 .inapp-banner span { flex: 1; }
 .inapp-banner .btn { flex: 0 0 auto; font-size: 13px; padding: 7px 10px; }
 
+/* ---------- 첫 화면 통계 ---------- */
+.play-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.play-stats[hidden] { display: none; }
+.play-stats div {
+  min-width: 0;
+  padding: 8px 4px 7px;
+  border-radius: 14px;
+  background: var(--glass);
+  border: 1.5px solid rgba(79, 240, 255, 0.45);
+  box-shadow: 0 0 10px rgba(79, 240, 255, 0.18), inset 0 0 12px rgba(79, 240, 255, 0.08);
+}
+.play-stats div:nth-child(2) { border-color: rgba(255, 79, 216, 0.5); box-shadow: 0 0 10px rgba(255, 79, 216, 0.2), inset 0 0 12px rgba(255, 79, 216, 0.08); }
+.play-stats div:nth-child(3) { border-color: rgba(255, 228, 92, 0.5); box-shadow: 0 0 10px rgba(255, 228, 92, 0.2), inset 0 0 12px rgba(255, 228, 92, 0.08); }
+.play-stats b {
+  display: block;
+  font-size: 24px;
+  font-weight: normal;
+  line-height: 1.1;
+  color: #fff;
+  white-space: nowrap;
+  text-shadow: 0 0 8px var(--cyan);
+}
+.play-stats div:nth-child(2) b { text-shadow: 0 0 8px var(--pink); }
+.play-stats div:nth-child(3) b { text-shadow: 0 0 8px var(--yellow); }
+.play-stats span { font-size: 13px; color: var(--ink-soft); white-space: nowrap; }
+
 /* ---------- 만든 사람 표시 (메뉴 아래) ---------- */
 .maker {
   margin-top: 16px;
