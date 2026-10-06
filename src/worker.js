@@ -10,7 +10,7 @@ import {
 import { hasProfanity } from '../public/js/profanity.js';
 import { SCHOOLS_PATH, indexSchools, shortSchool, placeOf } from '../public/js/schools.js';
 
-const HEARTBEAT_MS = 60 * 1000;      // 방이 살아 있다고 로비에 알리는 주기
+const HEARTBEAT_MS = 5 * 60 * 1000;  // 방이 살아 있다고 로비에 알리는 주기 (무료 한도를 아끼려고 5분)
 const STALE_MS = 3 * HEARTBEAT_MS;   // 이 시간 동안 소식이 없는 방은 목록에서 지움
 const RANK_CACHE_MS = 60 * 1000;
 const MAX_STATE_BYTES = 4000;
@@ -534,7 +534,7 @@ export class GameRoom extends DurableObject {
     await this.leave(ws);
   }
 
-  // 1분마다: 아무도 없으면 방을 정리하고, 있으면 로비에 살아 있다고 알림
+  // 5분마다: 아무도 없으면 방을 정리하고, 있으면 로비에 살아 있다고 알림
   async alarm() {
     const m = await this.load();
     if (!m) return;

@@ -22,8 +22,10 @@ let myName = '';
 let currentRoom = null;
 let screen = 'menu';
 
-// 상대에게 내 화면을 보내는 간격(초). 1초에 최대 5번이라 무료 플랜 요청 수를 아낄 수 있어요.
-const SEND_INTERVAL = 0.2;
+// 상대에게 내 화면을 보내는 간격(초). 무료 플랜 요청 수를 아끼려고 꼭 필요할 때만 보내요.
+// 내 게임은 내 기기에서 돌아가서, 이 값을 늘려도 내 화면은 전혀 느려지지 않아요.
+const SEND_CHECK = 0.6;   // 판·점수·방해 슬라임이 바뀌었는지 확인하는 간격
+const SEND_PAIR_ONLY = 2.5; // 떨어지는 슬라임 위치만 바뀌었을 때는 이만큼 기다렸다가 보냄
 
 // ---------------- 화면 전환 / 알림 ----------------
 
@@ -269,6 +271,8 @@ class Match {
     this.countdown = 3.4;
     this.sendTimer = 0;
     this.lastSnap = '';
+    this.lastPair = '';
+    this.pairTimer = 0;
     this.opps = [];
 
     const self = new PlayerGame({ seed: this.seed, name: myName || '나' });
@@ -383,12 +387,17 @@ class Match {
     }
     if (this.mode === 'online' && !this.over) {
       this.sendTimer -= dt;
+      this.pairTimer -= dt;
       if (this.sendTimer <= 0) {
-        this.sendTimer = SEND_INTERVAL;
+        this.sendTimer = SEND_CHECK;
         const snap = this.self.snapshot();
-        const key = JSON.stringify(snap);
-        if (key !== this.lastSnap) {
+        const key = JSON.stringify({ ...snap, p: null });
+        const pairKey = JSON.stringify(snap.p);
+        // 쌓인 판이 바뀌면 바로, 떨어지는 슬라임만 움직였으면 가끔씩
+        if (key !== this.lastSnap || (pairKey !== this.lastPair && this.pairTimer <= 0)) {
           this.lastSnap = key;
+          this.lastPair = pairKey;
+          this.pairTimer = SEND_PAIR_ONLY;
           roomNet.send('state', { s: snap });
         }
       }
@@ -458,7 +467,7 @@ class Match {
     if (this.mode !== 'online') reportPlayed(this.mode, this.self.time);
     if (this.mode === 'online') {
       $('result-sub').textContent += recorded ? ' (랭킹에 기록됐어요)' : ' (30초보다 짧은 판은 랭킹에 기록되지 않아요)';
-      if (recorded) setTimeout(refreshMyRecord, 800);
+      if (recorded) setTimeout(() => refreshMyRecord(true), 800);
     }
     $('result-stats').innerHTML = `
       <div><b>${this.self.score}</b><span>점수</span></div>
@@ -840,13 +849,21 @@ $('btn-pause-quit').onclick = () => { endMatch(); showScreen('menu'); };
 // ---------------- 내 기록 ----------------
 
 let recordTimer = null;
-async function refreshMyRecord() {
+let recordKey = '', recordAt = 0;
+// force: 방금 대결 결과가 기록됐을 때처럼 꼭 새로 받아야 할 때
+async function refreshMyRecord(force = false) {
   const box = $('my-record');
   const id = identity();
   if (identityError(id)) {
     box.textContent = '학교를 고르고 닉네임을 적으면 온라인 대결 기록이 랭킹에 올라가요.';
+    recordKey = '';
     return;
   }
+  // 같은 사람 기록은 1분 안에 다시 묻지 않음 (무료 한도 아끼기)
+  const key = `${id.schoolCode}/${id.nick}`;
+  if (!force && key === recordKey && Date.now() - recordAt < 60000) return;
+  recordKey = key;
+  recordAt = Date.now();
   try {
     const q = new URLSearchParams({ school: id.schoolCode, nick: id.nick });
     const res = await fetch(`/api/me?${q}`);
@@ -871,6 +888,7 @@ async function refreshMyRecord() {
     box.innerHTML = parts.join(' · ');
   } catch {
     box.textContent = '';
+    recordKey = '';
   }
 }
 $('name-input').addEventListener('input', () => {
