@@ -42,7 +42,7 @@ export class PlayerGame {
     this.listeners = {};
   }
 
-  on(ev, fn) { (this.listeners[ev] ||= []).push(fn); return this; }
+  on(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); return this; }
   emit(ev, data) { for (const fn of this.listeners[ev] || []) fn(data); }
 
   start() { if (this.state === 'ready') this.state = 'spawn'; }

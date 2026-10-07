@@ -3,8 +3,8 @@
 // 곡은 이 게임을 위해 새로 지은 멜로디입니다.
 
 const store = {
-  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch { /* 저장 못 해도 괜찮음 */ } },
+  get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* 저장 못 해도 괜찮음 */ } },
 };
 
 const midi = (n) => 440 * 2 ** ((n - 69) / 12);

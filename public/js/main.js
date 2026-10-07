@@ -12,8 +12,8 @@ const lobbyNet = new Net(); // 방 목록
 const roomNet = new Net();  // 대결방
 
 const store = {
-  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch { /* 저장 못 해도 괜찮음 */ } },
+  get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* 저장 못 해도 괜찮음 */ } },
 };
 
 let match = null;
@@ -47,7 +47,7 @@ function toast(msg) {
 
 // 검색해서 고른 학교 { code, name, sido, addr }
 let pickedSchool = null;
-try { pickedSchool = JSON.parse(store.get('gugu-school-v2') || 'null'); } catch { pickedSchool = null; }
+try { pickedSchool = JSON.parse(store.get('gugu-school-v2') || 'null'); } catch (_) { pickedSchool = null; }
 
 function identity() {
   return {
@@ -265,7 +265,7 @@ class Match {
   constructor({ mode, level = 'normal', seed, players = [] }) {
     this.mode = mode;
     this.level = level;
-    this.seed = seed ?? Math.floor(Math.random() * 2 ** 31);
+    this.seed = seed != null ? seed : Math.floor(Math.random() * 2 ** 31);
     this.over = false;
     this.paused = false;
     this.countdown = 3.4;
@@ -391,7 +391,7 @@ class Match {
       if (this.sendTimer <= 0) {
         this.sendTimer = SEND_CHECK;
         const snap = this.self.snapshot();
-        const key = JSON.stringify({ ...snap, p: null });
+        const key = JSON.stringify(Object.assign({}, snap, { p: null }));
         const pairKey = JSON.stringify(snap.p);
         // 쌓인 판이 바뀌면 바로, 떨어지는 슬라임만 움직였으면 가끔씩
         if (key !== this.lastSnap || (pairKey !== this.lastPair && this.pairTimer <= 0)) {
@@ -514,7 +514,7 @@ function enterFullscreen() {
     const req = fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen;
     const p = req.call(fsTarget, { navigationUI: 'hide' });
     if (p && p.catch) p.catch(() => {});
-  } catch { /* 지원하지 않으면 그냥 넘어감 */ }
+  } catch (_) { /* 지원하지 않으면 그냥 넘어감 */ }
 }
 
 function exitFullscreen() {
@@ -522,7 +522,7 @@ function exitFullscreen() {
   try {
     const p = exit && exit.call(document);
     if (p && p.catch) p.catch(() => {});
-  } catch { /* 무시 */ }
+  } catch (_) { /* 무시 */ }
 }
 
 function updateFullscreenButton() {
@@ -701,7 +701,7 @@ let schoolIndex = null;
 let schoolLoading = null;
 function loadSchoolIndex() {
   if (schoolIndex) return Promise.resolve(schoolIndex);
-  schoolLoading ||= fetch(SCHOOLS_PATH)
+  if (!schoolLoading) schoolLoading = fetch(SCHOOLS_PATH)
     .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
     .then((d) => { schoolIndex = indexSchools(d); return schoolIndex; })
     .catch(() => { schoolLoading = null; return null; });
@@ -886,7 +886,7 @@ async function refreshMyRecord(force = false) {
     if (r.winsRank) parts.push(`승리 랭킹 <b>${r.winsRank}</b>위`);
     if (r.schoolRank) parts.push(`우리 학교 <b>${r.schoolRank}</b>위`);
     box.innerHTML = parts.join(' · ');
-  } catch {
+  } catch (_) {
     box.textContent = '';
     recordKey = '';
   }
@@ -911,7 +911,7 @@ $('btn-qr-copy').onclick = async () => {
   try {
     await navigator.clipboard.writeText(SHARE_URL);
     toast('링크를 복사했어요. 학급 게시판이나 메신저에 붙여 넣어 주세요.');
-  } catch {
+  } catch (_) {
     toast(`복사가 안 되면 주소를 적어 주세요: ${SHARE_URL}`);
   }
 };
@@ -931,7 +931,7 @@ async function loadStats() {
     $('stat-students').textContent = r.students.toLocaleString('ko-KR');
     $('stat-games').textContent = r.games.toLocaleString('ko-KR');
     $('play-stats').hidden = false;
-  } catch {
+  } catch (_) {
     statsLoadedAt = 0;
   }
 }
@@ -973,7 +973,7 @@ async function loadRanking(type) {
     const res = await fetch(`/api/rank?type=${type}`);
     if (!res.ok) throw new Error();
     data = await res.json();
-  } catch {
+  } catch (_) {
     ul.innerHTML = '<li class="empty">랭킹 서버에 연결할 수 없어요.</li>';
     return;
   }
@@ -1037,7 +1037,7 @@ async function enterLobby() {
   try {
     await lobbyNet.connect('/ws/lobby');
     lobbyNet.send('hello');
-  } catch {
+  } catch (_) {
     $('lobby-status').textContent = '온라인 서버에 연결할 수 없어요. 인터넷 연결을 확인해 주세요.';
   }
 }
@@ -1054,7 +1054,7 @@ async function joinRoom(roomId) {
   try {
     await roomNet.connect(`/ws/room/${roomId}`);
     roomNet.send('join', { schoolCode: id.schoolCode, nick: id.nick });
-  } catch {
+  } catch (_) {
     toast('방에 들어갈 수 없어요.');
     enterLobby();
   }
@@ -1226,5 +1226,11 @@ function frame(now) {
     match.render();
   }
   requestAnimationFrame(frame);
+
+// 여기까지 왔으면 모든 파일을 문제없이 읽은 것 (index.html의 안전장치가 확인)
+window.__gameReady = true;
 }
 requestAnimationFrame(frame);
+
+// 여기까지 왔으면 모든 파일을 문제없이 읽은 것 (index.html의 안전장치가 확인)
+window.__gameReady = true;

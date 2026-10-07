@@ -51,7 +51,10 @@ button, input, select { font-family: inherit; color: inherit; }
 .screen {
   display: none;
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   overflow-y: auto;
   padding: 16px;
 }
@@ -206,7 +209,10 @@ button, input, select { font-family: inherit; color: inherit; }
 /* ---------- 게임 화면 ---------- */
 .arena-fit {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -426,7 +432,10 @@ body.touch .touch-controls { display: flex; }
 /* 오버레이 */
 .overlay {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   display: none;
   align-items: center;
   justify-content: center;

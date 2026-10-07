@@ -26,7 +26,7 @@ const ALLOWED = ['시발점', '보지마', '보지않', '보지도', '보지만'
 
 // 기호를 지운 글자 (keepDigits: '18놈' 같은 말을 잡기 위해 숫자를 남길지)
 function compact(s, keepDigits) {
-  const t = String(s ?? '').toLowerCase().normalize('NFC')
+  const t = String(s == null ? '' : s).toLowerCase().normalize('NFC')
     .replace(/[\s_.,!?~@#$%^&*()\-+=[\]{}|\\/:;"'<>`]/g, '');
   return keepDigits ? t : t.replace(/\d/g, '');
 }
