@@ -224,7 +224,7 @@ export function choosePlacement(game, lvl, oppPending = 0) {
   let cands = [];
   for (const pl of valid) {
     const res = scoreMove(g0, pl, pair, lvl, ctx);
-    if (res) cands.push({ pl, ...res });
+    if (res) cands.push(Object.assign({ pl: pl }, res));
   }
   if (lvl.depth >= 2) {
     const next = game.nextPairs[0];

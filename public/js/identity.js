@@ -4,14 +4,14 @@ import { hasProfanity } from './profanity.js';
 export const MIN_GAMES_FOR_WINRATE = 10; // 승률 랭킹에 오르려면 필요한 판 수
 export const MIN_GAME_SECONDS = 30;      // 이보다 짧은 판은 기록하지 않음
 
-const strip = (s) => String(s ?? '').replace(/[\u0000-\u001f<>"'`\\]/g, '');
+const strip = (s) => String(s == null ? '' : s).replace(/[\u0000-\u001f<>"'`\\]/g, '');
 
 export function normalizeNick(s) {
   return strip(s).replace(/\s+/g, ' ').trim().slice(0, 10);
 }
 
 export function normalizeSchoolCode(s) {
-  const v = String(s ?? '').trim();
+  const v = String(s == null ? '' : s).trim();
   return /^[0-9A-Za-z]{4,12}$/.test(v) ? v : '';
 }
 

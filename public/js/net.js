@@ -7,7 +7,7 @@ export class Net {
     this.pingTimer = null;
   }
 
-  on(type, fn) { (this.handlers[type] ||= []).push(fn); }
+  on(type, fn) { (this.handlers[type] = this.handlers[type] || []).push(fn); }
 
   connect(path) {
     this.close();
@@ -40,7 +40,7 @@ export class Net {
       ws.onmessage = (e) => {
         if (e.data === 'pong') return;
         let m;
-        try { m = JSON.parse(e.data); } catch { return; }
+        try { m = JSON.parse(e.data); } catch (_) { return; }
         this.dispatch(m);
       };
     });
@@ -51,7 +51,7 @@ export class Net {
     this.ws = null;
     this.connected = false;
     clearInterval(this.pingTimer);
-    if (ws) { try { ws.close(1000); } catch { /* 무시 */ } }
+    if (ws) { try { ws.close(1000); } catch (_) { /* 무시 */ } }
   }
 
   dispatch(m) {
@@ -59,6 +59,6 @@ export class Net {
   }
 
   send(type, data = {}) {
-    if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify({ type, ...data }));
+    if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(Object.assign({ type: type }, data)));
   }
 }
