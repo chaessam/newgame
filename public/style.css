@@ -825,3 +825,122 @@ body.portrait .dock-quit .btn { font-size: 14px; padding: 6px 14px; }
 .game-tools { display: flex; gap: 8px; }
 .game-tools #btn-quit { flex: 1; }
 .game-tools #btn-mute { flex: 0 0 auto; }
+
+/* ---------- 친구에게 상용구 보내기 ---------- */
+.emote-box { margin: 4px 0 12px; }
+.emote-log {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+.emote-log:empty { display: none; }
+.emote-log li {
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  font-size: 15px;
+  animation: pop 0.25s;
+}
+.emote-log li b { font-weight: normal; color: var(--cyan-soft); margin-right: 2px; }
+.emote-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.emote-btn {
+  min-width: 0;
+  padding: 8px 4px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255, 79, 216, 0.55);
+  background: rgba(255, 79, 216, 0.1);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(255, 79, 216, 0.25);
+}
+.emote-btn:active { transform: scale(0.95); }
+.emote-grid.cooling .emote-btn { opacity: 0.4; pointer-events: none; }
+.emote-mute { display: block; margin: 8px auto 0; font-size: 13px; padding: 5px 12px; }
+.emote-mute.off { opacity: 0.6; border-style: dashed; }
+@media (max-width: 520px) {
+  .emote-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* 게임 중: 💬 버튼과 고르는 창 */
+#btn-emote { flex: 0 0 auto; }
+#btn-emote[hidden] { display: none; }
+#btn-emote.on { border-color: var(--pink); box-shadow: 0 0 12px rgba(255, 79, 216, 0.6); }
+.emote-pop {
+  position: fixed;
+  left: 50%;
+  top: 14%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(440px, calc(100vw - 24px));
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(20, 8, 60, 0.96);
+  border: 1.5px solid var(--pink);
+  box-shadow: 0 0 22px rgba(255, 79, 216, 0.5);
+  text-align: center;
+  animation: pop 0.2s;
+}
+.emote-pop[hidden] { display: none; }
+.emote-pop-title { font-size: 14px; color: var(--ink-soft); margin-bottom: 8px; }
+.emote-pop-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+/* 보낸 친구의 판 위 말풍선 */
+.panel-bubble {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  z-index: 5;
+  max-width: 94%;
+  padding: 7px 12px;
+  border-radius: 14px;
+  background: #fff;
+  color: #2a1060;
+  font-size: 17px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.7), 0 0 26px rgba(79, 240, 255, 0.5);
+  pointer-events: none;
+  animation: bubble 2.5s forwards;
+}
+.panel.small .panel-bubble { font-size: 14px; padding: 5px 9px; }
+.panel.tiny .panel-bubble { font-size: 11px; padding: 3px 6px; border-radius: 9px; }
+@keyframes bubble {
+  0% { opacity: 0; transform: translate(-50%, 8px) scale(0.8); }
+  10% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* 결과 화면 */
+.result-emotes { margin: 4px 0 6px; }
+.result-emotes[hidden] { display: none; }
+.result-emotes .emote-btn { font-size: 13px; padding: 7px 2px; }
+/* 상용구가 더해져 결과 창이 길어지므로, 작은 휴대폰에서는 창 안에서 스크롤 */
+#overlay-result .modal { max-height: calc(100% - 24px); overflow-y: auto; }

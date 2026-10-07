@@ -6,6 +6,7 @@ import { audio } from './audio.js';
 import { normalizeNick, identityError, nickError, MIN_GAMES_FOR_WINRATE } from './identity.js';
 import { hasProfanity } from './profanity.js';
 import { SCHOOLS_PATH, indexSchools, searchSchools, countSameName, shortSchool, placeOf } from './schools.js';
+import { EMOTES, EMOTE_COOLDOWN_MS } from './emotes.js';
 
 const $ = (id) => document.getElementById(id);
 const lobbyNet = new Net(); // 방 목록
@@ -315,6 +316,8 @@ class Match {
     const label = this.mode === 'cpu' ? `컴퓨터 ${LEVELS[this.level].name}과 대결`
       : this.mode === 'solo' ? '혼자 연습' : `온라인 대결 · ${this.opps.length + 1}명`;
     $('mode-label').textContent = label;
+    $('btn-emote').hidden = this.mode !== 'online';
+    showEmotePop(false);
     $('overlay-result').classList.remove('show');
     $('overlay-pause').classList.remove('show');
     $('overlay-countdown').classList.add('show');
@@ -483,6 +486,8 @@ class Match {
       b.onclick = fn;
       btns.appendChild(b);
     };
+    $('result-emotes').hidden = this.mode !== 'online';
+    $('result-emote-log').innerHTML = '';
     if (this.mode === 'online') {
       add('대기실로', 'primary', () => { endMatch(); showScreen('room'); renderRoom(); });
       add('방 나가기', 'soft', () => { endMatch(); leaveRoomToLobby(); });
@@ -496,6 +501,7 @@ class Match {
 
 function endMatch() {
   match = null;
+  showEmotePop(false);
   quiz.hide();
   input.reset();
   ['overlay-result', 'overlay-pause', 'overlay-countdown'].forEach((id) => $(id).classList.remove('show'));
@@ -897,6 +903,119 @@ $('name-input').addEventListener('input', () => {
 });
 refreshMyRecord();
 
+// ---------------- 친구에게 상용구 보내기 (온라인 대결) ----------------
+// 대기실·게임 중·결과 화면 어디서나 보낼 수 있고, 받은 메시지는 "메시지 끄기"로 안 보이게 할 수 있어요.
+
+let emotesOn = store.get('gugu-emote') !== 'off';
+let emoteReadyAt = 0;
+
+function playerName(id) {
+  if (id === myId) return myName || '나';
+  const p = currentRoom && currentRoom.players.find((q) => q.id === id);
+  if (p) return p.name;
+  const o = match && match.opps.find((q) => q.id === id);
+  return o ? o.view.name : '친구';
+}
+
+function addEmoteLog(ul, name, text, max) {
+  const li = document.createElement('li');
+  const b = document.createElement('b');
+  b.textContent = name;
+  li.append(b, ` ${text}`);
+  ul.appendChild(li);
+  while (ul.children.length > max) ul.firstChild.remove();
+}
+
+// 보낸 친구의 판 위에 말풍선
+function showBubble(id, text) {
+  if (!match || screen !== 'game') return;
+  let panel = null;
+  if (id === myId) panel = match.selfPanel;
+  else {
+    const i = match.opps.findIndex((o) => o.id === id);
+    if (i >= 0) panel = match.oppPanels[i];
+  }
+  if (!panel) return;
+  const old = panel.el.querySelector('.panel-bubble');
+  if (old) old.remove();
+  const bubble = document.createElement('div');
+  bubble.className = 'panel-bubble';
+  bubble.textContent = text;
+  panel.el.appendChild(bubble);
+  setTimeout(() => bubble.remove(), 2500);
+}
+
+function showEmote(id, i) {
+  const text = EMOTES[i];
+  if (!text) return;
+  const name = playerName(id);
+  addEmoteLog($('room-emote-log'), name, text, 5);
+  if ($('overlay-result').classList.contains('show')) addEmoteLog($('result-emote-log'), name, text, 3);
+  showBubble(id, text);
+}
+
+function receiveEmote(id, i) {
+  if (!emotesOn || id === myId) return;
+  showEmote(id, i);
+  audio.sfx('emote');
+}
+
+function sendEmote(i) {
+  if (Date.now() < emoteReadyAt) return;
+  emoteReadyAt = Date.now() + EMOTE_COOLDOWN_MS;
+  roomNet.send('emote', { i });
+  showEmote(myId, i);
+  showEmotePop(false);
+  // 잠깐 동안 버튼을 흐리게 해서 다시 보낼 수 없음을 알려 줌
+  document.querySelectorAll('[data-emote-grid]').forEach((g) => g.classList.add('cooling'));
+  setTimeout(() => {
+    document.querySelectorAll('[data-emote-grid]').forEach((g) => g.classList.remove('cooling'));
+  }, EMOTE_COOLDOWN_MS);
+}
+
+document.querySelectorAll('[data-emote-grid]').forEach((grid) => {
+  EMOTES.forEach((text, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'emote-btn';
+    b.textContent = text;
+    // 버튼에 포커스가 남으면 Enter(정답 입력)가 이 버튼을 다시 누르게 되니 바로 풀어 줌
+    b.onclick = () => { b.blur(); sendEmote(i); };
+    grid.appendChild(b);
+  });
+});
+
+function updateEmoteMute() {
+  document.querySelectorAll('[data-emote-mute]').forEach((b) => {
+    b.textContent = emotesOn ? '🔔 친구 메시지 켜짐' : '🔕 친구 메시지 꺼짐';
+    b.classList.toggle('off', !emotesOn);
+    b.setAttribute('aria-pressed', String(emotesOn));
+  });
+}
+document.querySelectorAll('[data-emote-mute]').forEach((b) => {
+  b.onclick = () => {
+    b.blur();
+    emotesOn = !emotesOn;
+    store.set('gugu-emote', emotesOn ? 'on' : 'off');
+    updateEmoteMute();
+    toast(emotesOn ? '친구들의 메시지가 다시 보여요.' : '친구들의 메시지를 보이지 않게 했어요.');
+  };
+});
+updateEmoteMute();
+
+function showEmotePop(show) {
+  $('emote-pop').hidden = !show;
+  $('btn-emote').classList.toggle('on', show);
+}
+$('btn-emote').onclick = () => { $('btn-emote').blur(); showEmotePop($('emote-pop').hidden); };
+$('emote-pop-close').onclick = () => showEmotePop(false);
+// 고르는 창 바깥을 누르면 닫힘
+document.addEventListener('pointerdown', (e) => {
+  if ($('emote-pop').hidden) return;
+  if (e.target.closest('#emote-pop') || e.target.closest('#btn-emote')) return;
+  showEmotePop(false);
+});
+
 // ---------------- QR 공유 ----------------
 
 const SHARE_URL = 'https://gugupang.chaessam.workers.dev/';
@@ -1165,6 +1284,7 @@ lobbyNet.on('disconnected', () => {
 
 roomNet.on('joined', (m) => {
   myId = m.you;
+  $('room-emote-log').innerHTML = '';
   currentRoom = m.room;
   if (screen !== 'game') showScreen('room');
   renderRoom();
@@ -1189,6 +1309,7 @@ roomNet.on('attack', (m) => {
   match.self.receiveGarbage(m.n);
   audio.sfx('incoming');
 });
+roomNet.on('emote', (m) => receiveEmote(m.id, m.i));
 roomNet.on('playerDead', (m) => { if (match && match.mode === 'online') match.remoteDead(m.id); });
 roomNet.on('gameOver', (m) => {
   if (!match || match.mode !== 'online') return;

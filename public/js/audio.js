@@ -244,6 +244,7 @@ class SoundEngine {
       case 'go': this.notes('square', [84, 91], 0.07, 0.3, 0.28); break;
       case 'win': this.notes('square', [72, 76, 79, 84, 79, 84, 88], 0.11, 0.25, 0.28); break;
       case 'lose': this.notes('triangle', [76, 72, 67, 60], 0.18, 0.35, 0.4); break;
+      case 'emote': this.notes('triangle', [86, 91], 0.07, 0.12, 0.22); break;
       case 'danger': this.tone('square', 990, t, 0.06, 0.12, b); break;
     }
   }
