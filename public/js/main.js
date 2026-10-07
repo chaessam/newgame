@@ -1226,11 +1226,9 @@ function frame(now) {
     match.render();
   }
   requestAnimationFrame(frame);
-
-// 여기까지 왔으면 모든 파일을 문제없이 읽은 것 (index.html의 안전장치가 확인)
-window.__gameReady = true;
 }
 requestAnimationFrame(frame);
 
 // 여기까지 왔으면 모든 파일을 문제없이 읽은 것 (index.html의 안전장치가 확인)
+// 서버 응답(통계·내 기록)은 기다리지 않음: 학교 와이파이가 느려도 정상 기기에 안내 화면이 뜨지 않게
 window.__gameReady = true;
