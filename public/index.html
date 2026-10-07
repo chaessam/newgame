@@ -24,6 +24,7 @@
         <button class="btn soft small sound-toggle" id="btn-music" aria-pressed="true">🎵 음악</button>
         <button class="btn soft small sound-toggle" id="btn-sfx" aria-pressed="true">🔊 효과음</button>
         <button class="btn soft small" id="btn-fullscreen" hidden>⛶ 전체 화면</button>
+        <button class="btn soft small" id="btn-qr">📱 QR 공유</button>
       </div>
       <div class="logo-slimes" id="logo-slimes"></div>
       <h1 class="logo">구구팡 <span>슬라임</span></h1>
@@ -65,6 +66,19 @@
       <div class="maker">
         <div class="maker-title"><span>기획·제작</span><b>채쌤</b></div>
         <a class="maker-link" href="https://blog.naver.com/ai_classroom" target="_blank" rel="noopener">AI 수업 아카이브 · 채쌤 블로그 ↗</a>
+      </div>
+    </div>
+    <!-- 교실 화면에 띄워서 학생들이 휴대폰으로 찍고 들어오게 -->
+    <div class="overlay qr-overlay" id="overlay-qr">
+      <div class="modal qr-modal" role="dialog" aria-modal="true" aria-labelledby="qr-title">
+        <h2 id="qr-title">친구들과 함께해요!</h2>
+        <p>휴대폰 카메라로 찍으면 바로 들어올 수 있어요.</p>
+        <img class="qr-img" src="img/qr.svg" alt="구구팡 슬라임 접속 QR코드">
+        <div class="qr-url" id="qr-url">gugupang.chaessam.workers.dev</div>
+        <div class="btn-row wide">
+          <button class="btn primary" id="btn-qr-copy">링크 복사</button>
+          <button class="btn soft" id="btn-qr-close">닫기</button>
+        </div>
       </div>
     </div>
   </section>

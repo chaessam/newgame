@@ -701,7 +701,7 @@ body.portrait .panel-head { min-height: 0; }
 body.portrait .q-left { overflow: hidden; max-height: 100%; }
 
 /* ---------- 전체 화면 버튼 / 카카오톡 안내 ---------- */
-.menu-tools { display: flex; justify-content: flex-end; margin: -8px -6px 12px; min-height: 0; }
+.menu-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; margin: -8px -6px 12px; min-height: 0; }
 .menu-tools .btn { font-size: 13px; padding: 6px 10px; }
 .menu-tools .btn[hidden] { display: none; }
 .inapp-banner {
@@ -720,6 +720,28 @@ body.portrait .q-left { overflow: hidden; max-height: 100%; }
 .inapp-banner[hidden] { display: none; }
 .inapp-banner span { flex: 1; }
 .inapp-banner .btn { flex: 0 0 auto; font-size: 13px; padding: 7px 10px; }
+
+/* ---------- QR 공유 ---------- */
+.qr-overlay { position: fixed; z-index: 50; background: rgba(6, 2, 20, 0.82); padding: 16px; }
+.qr-modal { width: min(560px, 100%); max-height: 100%; overflow-y: auto; }
+.qr-modal h2 { font-size: clamp(26px, 6vw, 38px); }
+.qr-modal p { margin: 0 0 12px; }
+.qr-img {
+  display: block;
+  width: min(100%, 62vh, 420px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 0 0 4px var(--cyan), 0 0 28px rgba(79, 240, 255, 0.55);
+}
+.qr-url {
+  margin: 14px 0 4px;
+  font-size: clamp(16px, 4.2vw, 24px);
+  color: var(--cyan-soft);
+  word-break: break-all;
+  user-select: all;
+}
 
 /* ---------- 첫 화면 통계 ---------- */
 .play-stats {

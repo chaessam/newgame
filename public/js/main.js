@@ -897,6 +897,25 @@ $('name-input').addEventListener('input', () => {
 });
 refreshMyRecord();
 
+// ---------------- QR 공유 ----------------
+
+const SHARE_URL = 'https://gugupang.chaessam.workers.dev/';
+function showQr(show) { $('overlay-qr').classList.toggle('show', show); }
+$('btn-qr').onclick = () => showQr(true);
+$('btn-qr-close').onclick = () => showQr(false);
+$('overlay-qr').addEventListener('click', (e) => { if (e.target.id === 'overlay-qr') showQr(false); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('overlay-qr').classList.contains('show')) showQr(false);
+});
+$('btn-qr-copy').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(SHARE_URL);
+    toast('링크를 복사했어요. 학급 게시판이나 메신저에 붙여 넣어 주세요.');
+  } catch {
+    toast(`복사가 안 되면 주소를 적어 주세요: ${SHARE_URL}`);
+  }
+};
+
 // ---------------- 첫 화면 통계 ----------------
 
 let statsLoadedAt = 0;
