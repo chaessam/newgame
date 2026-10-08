@@ -5,19 +5,27 @@
 export const SCHOOLS_PATH = '/data/schools.json';
 
 // "경기도" → "경기", "서울특별시" → "서울", "전북특별자치도" → "전북"
+// 2026년 7월 1일 광주광역시와 전라남도가 전남광주통합특별시로 합쳐져서, 두 곳 모두 "전남광주"로 표기해요.
 const SIDO_SHORT = {
-  서울특별시: '서울', 부산광역시: '부산', 대구광역시: '대구', 인천광역시: '인천', 광주광역시: '광주',
+  서울특별시: '서울', 부산광역시: '부산', 대구광역시: '대구', 인천광역시: '인천', 광주광역시: '전남광주',
   대전광역시: '대전', 울산광역시: '울산', 세종특별자치시: '세종', 경기도: '경기',
   강원도: '강원', 강원특별자치도: '강원', 충청북도: '충북', 충청남도: '충남',
-  전라북도: '전북', 전북특별자치도: '전북', 전라남도: '전남', 경상북도: '경북', 경상남도: '경남',
+  전라북도: '전북', 전북특별자치도: '전북', 전라남도: '전남광주', 경상북도: '경북', 경상남도: '경남',
   제주특별자치도: '제주', 제주도: '제주',
 };
 export function shortSido(name) {
   const s = String(name || '').trim();
-  // 통합된 시도는 괄호 안의 옛 지역 이름으로: "전남광주통합특별시(광주)" → "광주"
-  const merged = s.match(/통합특별시\((.+)\)$/);
-  if (merged) return merged[1];
+  // "전남광주통합특별시(광주)", "전남광주통합특별시(전남)" → "전남광주"
+  if (s.startsWith('전남광주')) return '전남광주';
   return SIDO_SHORT[s] || s.replace(/(특별자치시|특별자치도|특별시|광역시)$/, '');
+}
+
+// 통합 전 이름으로 저장된 시도(학교 목록 파일, 기기에 저장해 둔 학교)를 지금 이름으로
+// 표시 이름만 바꾸고, 랭킹·기록에 쓰는 학교 코드는 그대로 둡니다.
+const SIDO_RENAMED = { 광주: '전남광주', 전남: '전남광주' };
+export function currentSido(sido) {
+  const s = String(sido || '');
+  return SIDO_RENAMED[s] || s;
 }
 
 // "송우초등학교" → "송우"
@@ -40,7 +48,7 @@ export function indexSchools(data) {
   for (const row of (data && data.schools) || []) {
     const [code, name, sido, addr] = row;
     if (!code || !name) continue;
-    const s = { code: String(code), name, sido: sido || '', addr: addr || '', base: baseName(name) };
+    const s = { code: String(code), name, sido: currentSido(sido), addr: addr || '', base: baseName(name) };
     list.push(s);
     byCode.set(s.code, s);
   }

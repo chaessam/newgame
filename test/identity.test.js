@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { normalizeNick, identityError, nickError } from '../public/js/identity.js';
 import { hasProfanity } from '../public/js/profanity.js';
-import { indexSchools, searchSchools, countSameName, baseName, shortSido, placeOf } from '../public/js/schools.js';
+import { indexSchools, searchSchools, countSameName, baseName, shortSido, placeOf, currentSido } from '../public/js/schools.js';
 import { sigunguOf } from '../scripts/update-schools.mjs';
 
 const sample = JSON.parse(fs.readFileSync(new URL('./fixtures/schools-sample.json', import.meta.url)));
@@ -22,7 +22,7 @@ test('학교 검색: "송우", "송우초", "송우 초등학교" 모두 같은 
 test('같은 이름의 학교는 위치로 구분한다', () => {
   assert.equal(countSameName(idx, '송우초등학교'), 2);
   const places = searchSchools(idx, '송우초').slice(0, 2).map(placeOf).sort();
-  assert.deepEqual(places, ['경기 포천시', '광주 광산구']);
+  assert.deepEqual(places, ['경기 포천시', '전남광주 광산구']); // 목록 파일의 옛 '광주'도 지금 이름으로
 });
 
 test('학교 이름/주소 다듬기', () => {
@@ -30,8 +30,16 @@ test('학교 이름/주소 다듬기', () => {
   assert.equal(shortSido('경기도'), '경기');
   assert.equal(shortSido('서울특별시'), '서울');
   assert.equal(shortSido('전북특별자치도'), '전북');
-  assert.equal(shortSido('전남광주통합특별시(광주)'), '광주');
-  assert.equal(shortSido('전남광주통합특별시(전남)'), '전남');
+  // 2026년 7월 1일 전남광주통합특별시 출범: 옛 광주·전남 모두 "전남광주"
+  assert.equal(shortSido('전남광주통합특별시(광주)'), '전남광주');
+  assert.equal(shortSido('전남광주통합특별시(전남)'), '전남광주');
+  assert.equal(shortSido('전남광주통합특별시'), '전남광주');
+  assert.equal(shortSido('광주광역시'), '전남광주'); // CSV로 만들 때
+  assert.equal(shortSido('전라남도'), '전남광주');
+  assert.equal(currentSido('광주'), '전남광주');
+  assert.equal(currentSido('전남'), '전남광주');
+  assert.equal(currentSido('전북'), '전북');
+  assert.equal(currentSido('경기'), '경기');
   assert.equal(sigunguOf('경기도 포천시 소흘읍 송우로 1'), '포천시');
   assert.equal(sigunguOf('경기도 수원시 장안구 정자로 1'), '수원시 장안구');
   assert.equal(sigunguOf('세종특별자치시 한누리대로 1'), '');
@@ -64,4 +72,17 @@ test('학교를 고르고 닉네임을 적어야 랭킹에 기록한다', () => 
   assert.equal(identityError({ schoolCode: 'T000001', nick: '민준' }), null);
   assert.ok(identityError({ schoolCode: '', nick: '민준' }));
   assert.ok(identityError({ schoolCode: 'T000001', nick: '민' }));
+});
+
+test('실제 학교 목록: 옛 광주·전남 학교는 "전남광주"로, 학교 코드는 그대로', () => {
+  const data = JSON.parse(fs.readFileSync(new URL('../public/data/schools.json', import.meta.url)));
+  const real = indexSchools(data);
+  const gakhwa = searchSchools(real, '각화초').find((s) => s.name === '각화초등학교');
+  assert.equal(placeOf(gakhwa), '전남광주 북구');
+  assert.equal(gakhwa.code, '7392135');
+  const gageodo = searchSchools(real, '가거도').find((s) => s.name === '가거도초등학교');
+  assert.equal(placeOf(gageodo), '전남광주 신안군');
+  assert.equal(gageodo.code, '8722030');
+  // 화면에 옛 이름이 남은 학교가 없음
+  assert.equal(real.list.filter((s) => s.sido === '광주' || s.sido === '전남').length, 0);
 });

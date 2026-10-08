@@ -5,7 +5,7 @@ import { Net } from './net.js';
 import { audio } from './audio.js';
 import { normalizeNick, identityError, nickError, MIN_GAMES_FOR_WINRATE } from './identity.js';
 import { hasProfanity } from './profanity.js';
-import { SCHOOLS_PATH, indexSchools, searchSchools, countSameName, shortSchool, placeOf } from './schools.js';
+import { SCHOOLS_PATH, indexSchools, searchSchools, countSameName, shortSchool, placeOf, currentSido } from './schools.js';
 import { EMOTES, EMOTE_COOLDOWN_MS } from './emotes.js';
 
 const $ = (id) => document.getElementById(id);
@@ -49,6 +49,8 @@ function toast(msg) {
 // 검색해서 고른 학교 { code, name, sido, addr }
 let pickedSchool = null;
 try { pickedSchool = JSON.parse(store.get('gugu-school-v2') || 'null'); } catch (_) { pickedSchool = null; }
+// 통합 전 지역 이름(광주·전남)으로 저장해 둔 학교도 지금 이름으로 보여 줌 (학교 코드는 그대로)
+if (pickedSchool) pickedSchool.sido = currentSido(pickedSchool.sido);
 
 function identity() {
   return {
