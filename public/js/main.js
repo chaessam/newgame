@@ -5,7 +5,7 @@ import { Net } from './net.js';
 import { audio } from './audio.js';
 import { normalizeNick, identityError, nickError, MIN_GAMES_FOR_WINRATE } from './identity.js';
 import { hasProfanity } from './profanity.js';
-import { SCHOOLS_PATH, indexSchools, searchSchools, countSameName, shortSchool, placeOf } from './schools.js';
+import { SCHOOLS_PATH, indexSchools, searchSchools, countSameName, shortSchool, placeOf, currentSido } from './schools.js';
 import { EMOTES, EMOTE_COOLDOWN_MS } from './emotes.js';
 
 const $ = (id) => document.getElementById(id);
@@ -49,6 +49,8 @@ function toast(msg) {
 // 검색해서 고른 학교 { code, name, sido, addr }
 let pickedSchool = null;
 try { pickedSchool = JSON.parse(store.get('gugu-school-v2') || 'null'); } catch (_) { pickedSchool = null; }
+// 통합 전 지역 이름(광주·전남)으로 저장해 둔 학교도 지금 이름으로 보여 줌 (학교 코드는 그대로)
+if (pickedSchool) pickedSchool.sido = currentSido(pickedSchool.sido);
 
 function identity() {
   return {
@@ -452,6 +454,13 @@ class Match {
     if (!this.paused) input.reset();
   }
 
+  // 컴퓨터 대결·혼자 연습 한 판을 첫 화면의 누적 대결 수에 더함 (끝난 판도, 도중에 나간 판도 한 번만)
+  reportPlayed() {
+    if (this.mode === 'online' || this.reported) return;
+    this.reported = true;
+    reportPlayed(this.mode, this.self.time);
+  }
+
   // win: true 승리, false 패배, null 연습 종료
   finish(win, winnerName, recorded) {
     if (this.over) return;
@@ -467,7 +476,7 @@ class Match {
       ? '구구단 실력이 쑥쑥 자라고 있어요.'
       : win ? '곱셈 연쇄 최고!'
         : winnerName ? `${winnerName} 친구가 이겼어요. 다시 도전해 봐요!` : '다시 도전해 봐요!';
-    if (this.mode !== 'online') reportPlayed(this.mode, this.self.time);
+    this.reportPlayed();
     if (this.mode === 'online') {
       $('result-sub').textContent += recorded ? ' (랭킹에 기록됐어요)' : ' (30초보다 짧은 판은 랭킹에 기록되지 않아요)';
       if (recorded) setTimeout(() => refreshMyRecord(true), 800);
@@ -500,6 +509,8 @@ class Match {
 }
 
 function endMatch() {
+  // 그만하기·메뉴로·다시 하기로 나간 판도 셈 (이미 센 판은 다시 세지 않음)
+  if (match) match.reportPlayed();
   match = null;
   showEmotePop(false);
   quiz.hide();
@@ -1056,6 +1067,9 @@ async function loadStats() {
 }
 loadStats();
 
+// 게임 도중에 창을 닫거나 다른 주소로 가도 셈
+addEventListener('pagehide', () => { if (match) match.reportPlayed(); });
+
 // 컴퓨터 대결·혼자 연습 한 판을 누적 대결 수에 더함 (너무 짧은 판은 빼요)
 function reportPlayed(mode, seconds) {
   if (seconds < 20) return;
@@ -1063,10 +1077,15 @@ function reportPlayed(mode, seconds) {
   const body = { mode };
   if (!identityError(id)) { body.schoolCode = id.schoolCode; body.nick = id.nick; }
   statsLoadedAt = 0; // 메뉴로 돌아가면 바로 새 숫자를 보여 줌
+  const json = JSON.stringify(body);
+  // sendBeacon은 창을 닫는 중에도 브라우저가 끝까지 보내 줌
+  try {
+    if (navigator.sendBeacon && navigator.sendBeacon('/api/played', json)) return;
+  } catch (_) { /* 아래 방법으로 */ }
   fetch('/api/played', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: json,
     keepalive: true,
   }).catch(() => {});
 }
