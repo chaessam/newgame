@@ -152,6 +152,12 @@
       <h1 class="title-sm" id="room-title-text">방</h1>
       <p class="room-sub" id="room-sub"></p>
       <ul class="player-list" id="room-players"></ul>
+      <!-- 친구들과 상용구 주고받기 -->
+      <div class="emote-box">
+        <ul class="emote-log" id="room-emote-log"></ul>
+        <div class="emote-grid" data-emote-grid></div>
+        <button type="button" class="btn soft small emote-mute" data-emote-mute aria-pressed="true">🔔 친구 메시지 켜짐</button>
+      </div>
       <p class="status-msg" id="room-status"></p>
       <div class="btn-row wide">
         <button class="btn primary" id="btn-ready">준비 완료</button>
@@ -190,6 +196,7 @@
           <div class="mini-row" id="mini-row">
             <div class="mini-stats" id="mini-stats"></div>
             <div class="game-tools" id="game-tools">
+              <button class="btn soft small" id="btn-emote" aria-label="친구에게 메시지 보내기" hidden>💬</button>
               <button class="btn soft small" id="btn-mute" aria-label="소리 켜기/끄기">🔊</button>
               <button class="btn soft small" id="btn-quit">그만하기</button>
             </div>
@@ -207,6 +214,13 @@
     </div>
     <!-- 세로 화면(휴대폰)에서는 곱셈 창과 조작 버튼을 아래쪽에 크게 모읍니다 -->
     <div class="dock" id="dock"><div class="dock-quit" id="dock-quit"></div></div>
+    <!-- 게임 중 상용구 고르기 (온라인 대결) -->
+    <div class="emote-pop" id="emote-pop" hidden>
+      <button type="button" class="emote-pop-close" id="emote-pop-close" aria-label="닫기">✕</button>
+      <div class="emote-pop-title">친구에게 보내기</div>
+      <div class="emote-grid" data-emote-grid></div>
+      <button type="button" class="btn soft small emote-mute" data-emote-mute aria-pressed="true">🔔 친구 메시지 켜짐</button>
+    </div>
     <div class="overlay" id="overlay-countdown"><div class="countdown" id="countdown-text">3</div></div>
     <div class="overlay" id="overlay-pause">
       <div class="modal">
@@ -220,6 +234,10 @@
         <h2 id="result-title">승리!</h2>
         <p id="result-sub"></p>
         <div class="result-stats" id="result-stats"></div>
+        <div class="result-emotes" id="result-emotes" hidden>
+          <ul class="emote-log" id="result-emote-log"></ul>
+          <div class="emote-grid" data-emote-grid></div>
+        </div>
         <div class="btn-row wide" id="result-buttons"></div>
       </div>
     </div>

@@ -8,6 +8,7 @@ import {
   normalizeNick, normalizeSchoolCode, identityError, MIN_GAMES_FOR_WINRATE, MIN_GAME_SECONDS,
 } from '../public/js/identity.js';
 import { hasProfanity } from '../public/js/profanity.js';
+import { EMOTES, EMOTE_COOLDOWN_MS } from '../public/js/emotes.js';
 import { SCHOOLS_PATH, indexSchools, shortSchool, placeOf } from '../public/js/schools.js';
 
 const HEARTBEAT_MS = 5 * 60 * 1000;  // 방이 살아 있다고 로비에 알리는 주기 (무료 한도를 아끼려고 5분)
@@ -418,6 +419,17 @@ export class GameRoom extends DurableObject {
         if (!n) return;
         const targets = this.players().filter((p) => p.ws !== ws && p.a.alive);
         this.broadcast('attack', { from: a.id, n }, ws, targets);
+        return;
+      }
+      case 'emote': {
+        // 상용구: 번호만 확인해서 다른 친구들에게 전달 (대기실·게임 중·결과 화면 모두)
+        const i = Number(msg.i);
+        if (!Number.isInteger(i) || i < 0 || i >= EMOTES.length) return;
+        const now = Date.now();
+        if (a.emAt && now - a.emAt < EMOTE_COOLDOWN_MS - 500) return; // 너무 자주 보내면 무시
+        a.emAt = now;
+        ws.serializeAttachment(a);
+        this.broadcast('emote', { id: a.id, i }, ws);
         return;
       }
       case 'dead':
