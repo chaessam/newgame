@@ -7,6 +7,9 @@ import { normalizeNick, identityError, nickError, MIN_GAMES_FOR_WINRATE } from '
 import { hasProfanity } from './profanity.js';
 import { SCHOOLS_PATH, indexSchools, searchSchools, countSameName, shortSchool, placeOf, currentSido } from './schools.js';
 import { EMOTES, EMOTE_COOLDOWN_MS } from './emotes.js';
+import { tierInfo, nextTier, MASTER_RP, GRANDMASTER_TOP, CHALLENGER_TOP } from './tiers.js';
+import { TITLES, TITLE_GROUPS, titleInfo } from './titles.js';
+import { nameplate, tierChip } from './badge.js';
 
 const $ = (id) => document.getElementById(id);
 const lobbyNet = new Net(); // 방 목록
@@ -21,6 +24,9 @@ let match = null;
 let myId = null;
 let myName = '';
 let currentRoom = null;
+// 내 티어·대표 칭호 (내 기록을 불러오면 채워짐)
+let myBadge = { tier: 'bronze', title: '', found: false };
+let myMe = null; // /api/me 응답
 let screen = 'menu';
 
 // 상대에게 내 화면을 보내는 간격(초). 무료 플랜 요청 수를 아끼려고 꼭 필요할 때만 보내요.
@@ -93,7 +99,7 @@ if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) documen
 // ---------------- 플레이어 패널 ----------------
 
 class Panel {
-  constructor(view, { cs, self = false, subtitle = '', school = '' }) {
+  constructor(view, { cs, self = false, subtitle = '', school = '', tier = '' }) {
     this.view = view;
     this.cs = cs;
     const el = document.createElement('div');
@@ -110,12 +116,20 @@ class Panel {
       <div class="board-frame"><canvas class="board"></canvas></div>
       <div class="panel-foot"><span>점수</span><span class="panel-score">0</span></div>
       <div class="panel-qtag"></div>`;
-    el.querySelector('.panel-name').textContent = view.name;
     el.querySelector('.panel-school').textContent = school;
-    if (subtitle) {
+    const nameEl = el.querySelector('.panel-name');
+    if (tier) {
+      // 티어 이름표 (롤 랭크처럼). 판이 좁아서 칭호는 대기실·랭킹·결과 화면에서만
+      nameEl.classList.add('has-np');
+      // 내 판은 테두리로 이미 구분되니 "(나)"는 빼고 이름을 더 보여 줌
+      nameEl.appendChild(nameplate(view.name, tier, { small: cs < 36 }));
+    } else {
+      nameEl.textContent = view.name;
+    }
+    if (subtitle && !tier) {
       const s = document.createElement('small');
       s.textContent = subtitle;
-      el.querySelector('.panel-name').appendChild(s);
+      nameEl.appendChild(s);
     }
     this.el = el;
     this.board = el.querySelector('.board');
@@ -268,6 +282,7 @@ class Match {
   constructor({ mode, level = 'normal', seed, players = [] }) {
     this.mode = mode;
     this.level = level;
+    this.players = players;
     this.seed = seed != null ? seed : Math.floor(Math.random() * 2 ** 31);
     this.over = false;
     this.paused = false;
@@ -304,7 +319,7 @@ class Match {
         const view = new RemoteView(p.name);
         // 모두 같은 순서의 슬라임을 받으므로, 첫 화면 정보가 오기 전에도 다음 슬라임을 보여 줄 수 있어요.
         view.nextPairs = self.nextPairs;
-        this.opps.push({ id: p.id, view, school: p.school || '' });
+        this.opps.push({ id: p.id, view, school: p.school || '', tier: p.tier || 'bronze', title: p.title || '' });
       }
       self.on('attack', (n) => roomNet.send('attack', { n }));
     }
@@ -336,14 +351,19 @@ class Match {
     // 상대 판만 지움 (세로 화면에서는 그만하기 버튼도 이 칸에 들어 있음)
     $('opp-area').querySelectorAll('.panel').forEach((el) => el.remove());
     const mySchool = pickedSchool ? shortSchool(pickedSchool.name) : '';
-    this.selfPanel = new Panel(this.self, { cs: 40, self: true, subtitle: '(나)', school: mySchool });
+    // 내 티어 이름표: 온라인이면 서버가 알려 준 값, 아니면 내 기록에서
+    const meInfo = (this.players || []).find((p) => p.id === myId);
+    const myTier = meInfo ? meInfo.tier : (myBadge.found ? myBadge.tier : '');
+    this.selfPanel = new Panel(this.self, {
+      cs: 40, self: true, subtitle: '(나)', school: mySchool, tier: myTier,
+    });
     $('self-slot').appendChild(this.selfPanel.el);
     const n = this.opps.length;
     // 세로 화면에서는 상대 판을 작게 해서 내 판을 최대한 크게
     const ocs = portrait ? [15, 15, 13, 10][n] : [40, 40, 30, 24][n];
     const quit = $('game-tools');
     this.oppPanels = this.opps.map((o) => {
-      const p = new Panel(o.view, { cs: ocs, school: o.school });
+      const p = new Panel(o.view, { cs: ocs, school: o.school, tier: o.tier || '' });
       $('opp-area').insertBefore(p.el, quit.parentElement === $('opp-area') ? quit : null);
       return p;
     });
@@ -462,7 +482,8 @@ class Match {
   }
 
   // win: true 승리, false 패배, null 연습 종료
-  finish(win, winnerName, recorded) {
+  // tierRes: 온라인 대결이 기록됐을 때 서버가 알려 준 내 티어 변화
+  finish(win, winnerName, recorded, tierRes) {
     if (this.over) return;
     this.over = true;
     quiz.hide();
@@ -495,6 +516,7 @@ class Match {
       b.onclick = fn;
       btns.appendChild(b);
     };
+    showTierResult(this.mode === 'online' ? tierRes : null);
     $('result-emotes').hidden = this.mode !== 'online';
     $('result-emote-log').innerHTML = '';
     if (this.mode === 'online') {
@@ -505,6 +527,64 @@ class Match {
       add('메뉴로', 'soft', () => { endMatch(); showScreen('menu'); });
     }
     $('overlay-result').classList.add('show');
+  }
+}
+
+// 결과 화면: 티어 점수 변화, 승급 연출, 새 칭호
+function showTierResult(r) {
+  const box = $('result-tier');
+  box.innerHTML = '';
+  box.hidden = !r;
+  if (!r) return;
+  const up = tierInfo(r.tierAfter).order > tierInfo(r.tierBefore).order;
+  const down = tierInfo(r.tierAfter).order < tierInfo(r.tierBefore).order;
+  if (up) {
+    const promo = document.createElement('div');
+    promo.className = `promo t-${r.tierAfter}`;
+    promo.innerHTML = '<div class="promo-burst"></div>';
+    promo.appendChild(tierChip(r.tierAfter));
+    const txt = document.createElement('div');
+    txt.className = 'promo-text';
+    txt.textContent = `🎉 ${tierInfo(r.tierAfter).name} 승급!`;
+    promo.appendChild(txt);
+    box.appendChild(promo);
+    audio.sfx('allclear');
+  }
+  const row = document.createElement('div');
+  row.className = 'rt-row';
+  row.appendChild(tierChip(r.tierAfter));
+  const diff = r.rpAfter - r.rpBefore;
+  const d = document.createElement('span');
+  d.className = `rt-diff${diff > 0 ? ' plus' : diff < 0 ? ' minus' : ''}`;
+  d.textContent = diff > 0 ? `+${diff}` : diff < 0 ? `${diff}` : '±0';
+  const pts = document.createElement('span');
+  pts.className = 'rt-rp';
+  pts.textContent = `${r.rpAfter.toLocaleString('ko-KR')}점`;
+  row.append(pts, d);
+  box.appendChild(row);
+  const nt = nextTier(r.rpAfter);
+  const bar = document.createElement('div');
+  bar.className = 'mt-bar';
+  const fill = document.createElement('i');
+  // 막대는 이전 점수에서 새 점수로 차오르게
+  const before = nextTier(r.rpBefore);
+  fill.style.width = `${Math.round(((before && !up && !down) ? before.progress : (nt ? 0 : 1)) * 100)}%`;
+  bar.appendChild(fill);
+  box.appendChild(bar);
+  setTimeout(() => { fill.style.width = `${Math.round((nt ? nt.progress : 1) * 100)}%`; }, 250);
+  const note = document.createElement('small');
+  note.className = 'mt-note';
+  note.textContent = nt ? `${nt.next.name}까지 ${nt.need}점`
+    : diff === 0 && !r.rpBefore ? '' : '마스터 중 TOP 30은 그랜드마스터, TOP 10은 챌린저!';
+  if (diff === 0 && r.rpBefore > 0 && !up) note.textContent = `강등 보호! ${tierInfo(r.tierAfter).name} 아래로는 떨어지지 않아요`;
+  box.appendChild(note);
+  for (const id of r.newTitles || []) {
+    const ti = titleInfo(id);
+    if (!ti) continue;
+    const nt2 = document.createElement('div');
+    nt2.className = 'new-title';
+    nt2.textContent = `🎉 새 칭호: ${ti.icon} ${ti.name}`;
+    box.appendChild(nt2);
   }
 }
 
@@ -874,6 +954,8 @@ async function refreshMyRecord(force = false) {
   if (identityError(id)) {
     box.textContent = '학교를 고르고 닉네임을 적으면 온라인 대결 기록이 랭킹에 올라가요.';
     recordKey = '';
+    myMe = null;
+    myBadge = { tier: 'bronze', title: '', found: false };
     return;
   }
   // 같은 사람 기록은 1분 안에 다시 묻지 않음 (무료 한도 아끼기)
@@ -888,26 +970,132 @@ async function refreshMyRecord(force = false) {
     const r = await res.json();
     const cur = identity();
     if (cur.schoolCode !== id.schoolCode || cur.nick !== id.nick) return;
-    if (!r.found) {
-      box.innerHTML = '';
-      box.textContent = `${shortSchool(id.school.name)} · ${id.nick} — 아직 온라인 대결 기록이 없어요.`;
-      return;
-    }
-    const rate = Math.round((r.wins / r.games) * 100);
-    box.innerHTML = '';
-    const parts = [
-      `승리 <b>${r.wins}</b>`,
-      `대결 <b>${r.games}</b>`,
-      `승률 <b>${rate}%</b>`,
-    ];
-    if (r.winsRank) parts.push(`승리 랭킹 <b>${r.winsRank}</b>위`);
-    if (r.schoolRank) parts.push(`우리 학교 <b>${r.schoolRank}</b>위`);
-    box.innerHTML = parts.join(' · ');
+    renderMyRecord(r, id);
   } catch (_) {
     box.textContent = '';
     recordKey = '';
   }
 }
+
+// 홈 화면 내 기록: 티어 이름표 + 점수 막대 + 칭호 도감
+function renderMyRecord(r, id) {
+  const box = $('my-record');
+  myMe = r;
+  myBadge = { tier: r.tier || 'bronze', title: r.title || '', found: !!r.found };
+  box.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = `my-tier t-${myBadge.tier}`;
+  const head = document.createElement('div');
+  head.className = 'mt-head';
+  head.appendChild(nameplate(id.nick, myBadge.tier, { title: myBadge.title }));
+  const book = document.createElement('button');
+  book.type = 'button';
+  book.className = 'btn soft small mt-book';
+  const got = (r.titles || []).length;
+  book.textContent = `🏅 칭호 ${got}개`;
+  book.onclick = () => openTitleBook();
+  head.appendChild(book);
+  card.appendChild(head);
+
+  const t = tierInfo(myBadge.tier);
+  const line = document.createElement('div');
+  line.className = 'mt-line';
+  const rp = r.rp || 0;
+  line.innerHTML = `<b class="mt-tier">${t.name}</b> <span class="mt-rp">${rp.toLocaleString('ko-KR')}점</span>`;
+  card.appendChild(line);
+  const nt = nextTier(rp);
+  const bar = document.createElement('div');
+  bar.className = 'mt-bar';
+  const fill = document.createElement('i');
+  const note = document.createElement('small');
+  note.className = 'mt-note';
+  if (nt) {
+    fill.style.width = `${Math.round(nt.progress * 100)}%`;
+    note.textContent = `${nt.next.name}까지 ${nt.need}점`;
+  } else {
+    fill.style.width = '100%';
+    note.textContent = r.rpRank
+      ? `마스터 중 전국 ${r.rpRank}위 · TOP ${GRANDMASTER_TOP} 그랜드마스터, TOP ${CHALLENGER_TOP} 챌린저`
+      : `${MASTER_RP}점 이상`;
+  }
+  bar.appendChild(fill);
+  card.append(bar, note);
+
+  const stats = document.createElement('div');
+  stats.className = 'mt-stats';
+  if (!r.found) {
+    stats.textContent = `${shortSchool(id.school.name)} — 온라인 대결에서 이기면 티어 점수가 올라요 (승리 +25 · 패배 -10)`;
+  } else {
+    const rate = Math.round((r.wins / r.games) * 100);
+    const parts = [`승리 <b>${r.wins}</b>`, `대결 <b>${r.games}</b>`, `승률 <b>${rate}%</b>`];
+    if (r.week && r.week.games) parts.push(`이번 주 <b>${r.week.wins}</b>승`);
+    if (r.winsRank) parts.push(`승리 랭킹 <b>${r.winsRank}</b>위`);
+    if (r.schoolRank) parts.push(`우리 학교 <b>${r.schoolRank}</b>위`);
+    stats.innerHTML = parts.join(' · ');
+  }
+  card.appendChild(stats);
+  box.appendChild(card);
+}
+
+// ---------------- 칭호 도감 ----------------
+
+function openTitleBook() {
+  const r = myMe || { titles: [], found: false };
+  const earned = r.titles || [];
+  const list = $('title-list');
+  list.innerHTML = '';
+  $('title-count').textContent = `${earned.length} / ${TITLES.filter((t) => !t.soon).length}`;
+  for (const g of TITLE_GROUPS) {
+    const items = TITLES.filter((t) => t.group === g.id);
+    if (!items.length) continue;
+    const h = document.createElement('h3');
+    h.textContent = g.name;
+    list.appendChild(h);
+    const grid = document.createElement('div');
+    grid.className = 'title-grid';
+    for (const t of items) {
+      const has = earned.indexOf(t.id) >= 0;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `title-card${has ? ' got' : ''}${t.soon ? ' soon' : ''}${r.title === t.id ? ' on' : ''}`;
+      b.disabled = !has;
+      b.innerHTML = '<span class="tc-icon"></span><span class="tc-name"></span><small class="tc-desc"></small>';
+      b.querySelector('.tc-icon').textContent = has ? t.icon : '🔒';
+      b.querySelector('.tc-name').textContent = t.name;
+      b.querySelector('.tc-desc').textContent = t.soon ? `${t.desc} · 곧 열려요` : (t.rank ? `${t.desc} · 순위에서 밀리면 사라져요` : t.desc);
+      if (has) b.onclick = () => chooseTitle(t.id);
+      grid.appendChild(b);
+    }
+    list.appendChild(grid);
+  }
+  $('title-none').hidden = !earned.length;
+  $('overlay-titles').classList.add('show');
+}
+
+async function chooseTitle(titleId) {
+  const id = identity();
+  if (identityError(id)) return;
+  try {
+    const res = await fetch('/api/title', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schoolCode: id.schoolCode, nick: id.nick, title: titleId }),
+    });
+    const r = await res.json();
+    if (!r.ok) { toast(r.error || '칭호를 바꾸지 못했어요.'); return; }
+    const ti = titleInfo(r.title);
+    toast(ti ? `대표 칭호: ${ti.icon} ${ti.name}` : '칭호를 달지 않기로 했어요.');
+  } catch (_) {
+    toast('서버에 연결할 수 없어요.');
+    return;
+  }
+  await refreshMyRecord(true);
+  openTitleBook();
+}
+$('title-none').onclick = () => chooseTitle('none');
+$('btn-titles-close').onclick = () => $('overlay-titles').classList.remove('show');
+$('overlay-titles').addEventListener('click', (e) => { if (e.target.id === 'overlay-titles') $('overlay-titles').classList.remove('show'); });
+
 $('name-input').addEventListener('input', () => {
   clearTimeout(recordTimer);
   recordTimer = setTimeout(() => { saveIdentity(); refreshMyRecord(); }, 500);
@@ -1093,32 +1281,60 @@ function reportPlayed(mode, seconds) {
 // ---------------- 랭킹 ----------------
 
 let rankType = 'wins';
+let rankPeriod = 'all';
 document.querySelectorAll('#rank-tabs button').forEach((b) => {
   b.addEventListener('click', () => loadRanking(b.dataset.rank));
+});
+document.querySelectorAll('#rank-period button').forEach((b) => {
+  b.addEventListener('click', () => {
+    rankPeriod = b.dataset.period;
+    // 티어는 전체 랭킹에만 있음
+    loadRanking(rankPeriod === 'week' && rankType === 'tier' ? 'wins' : rankType);
+  });
 });
 
 async function loadRanking(type) {
   rankType = type;
-  document.querySelectorAll('#rank-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.rank === type));
+  const period = rankPeriod;
+  document.querySelectorAll('#rank-period button').forEach((b) => b.classList.toggle('on', b.dataset.period === period));
+  document.querySelectorAll('#rank-tabs button').forEach((b) => {
+    b.classList.toggle('on', b.dataset.rank === type);
+    b.hidden = period === 'week' && b.dataset.rank === 'tier';
+  });
   const ul = $('rank-list');
   const note = $('rank-note');
-  note.textContent = type === 'winrate' ? `대결을 ${MIN_GAMES_FOR_WINRATE}판 이상 한 친구만 승률 랭킹에 올라요.`
-    : type === 'school' ? '학교 친구들의 승리 횟수를 모두 더한 순위예요.'
-      : '온라인 대결에서 이긴 횟수 순위예요.';
+  const week = period === 'week';
+  note.textContent = type === 'tier' ? `온라인 대결 티어 점수 순위예요. 마스터(${MASTER_RP}점) 중 TOP ${GRANDMASTER_TOP}은 그랜드마스터, TOP ${CHALLENGER_TOP}은 챌린저!`
+    : type === 'winrate' ? `대결을 ${week ? 5 : MIN_GAMES_FOR_WINRATE}판 이상 한 친구만 승률 랭킹에 올라요.`
+      : type === 'school' ? '학교 친구들의 승리 횟수를 모두 더한 순위예요.'
+        : '온라인 대결에서 이긴 횟수 순위예요.';
+  if (week) note.textContent += ' 매주 월요일 0시에 새로 시작해요.';
   ul.innerHTML = '<li class="empty">불러오는 중...</li>';
   let data;
   try {
-    const res = await fetch(`/api/rank?type=${type}`);
+    const res = await fetch(`/api/rank?type=${type}&period=${period}`);
     if (!res.ok) throw new Error();
     data = await res.json();
   } catch (_) {
     ul.innerHTML = '<li class="empty">랭킹 서버에 연결할 수 없어요.</li>';
     return;
   }
-  if (rankType !== type) return;
+  if (rankType !== type || rankPeriod !== period) return;
+  if (data.minGames && type === 'winrate') {
+    note.textContent = note.textContent.replace(/\d+판 이상/, `${data.minGames}판 이상`);
+  }
   ul.innerHTML = '';
+  if (week && data.lastChampion) {
+    const c = document.createElement('li');
+    c.className = 'champ';
+    c.textContent = `🏆 지난주 챔피언: ${data.lastChampion.nick} (${shortSchool(data.lastChampion.schoolName)}) · ${data.lastChampion.wins}승`;
+    ul.appendChild(c);
+  }
   if (!data.rows.length) {
-    ul.innerHTML = '<li class="empty">아직 기록이 없어요. 첫 번째 주인공이 되어 보세요!</li>';
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = week ? '이번 주에는 아직 기록이 없어요. 첫 번째 주인공이 되어 보세요!' : '아직 기록이 없어요. 첫 번째 주인공이 되어 보세요!';
+    ul.appendChild(li);
     return;
   }
   const me = identity();
@@ -1127,7 +1343,7 @@ async function loadRanking(type) {
     const isMe = type === 'school'
       ? r.school === me.schoolCode
       : r.school === me.schoolCode && r.nick === me.nick;
-    if (isMe) li.className = 'me';
+    li.className = `${isMe ? 'me' : ''}${i < 3 ? ` top${i + 1}` : ''}`;
     const rk = document.createElement('span');
     rk.className = 'rk';
     rk.textContent = i + 1;
@@ -1139,7 +1355,7 @@ async function loadRanking(type) {
       top.textContent = r.schoolName || '(학교 정보 없음)';
       sub.textContent = `${r.place} · 참여 ${r.players}명`;
     } else {
-      top.textContent = r.nick;
+      top.appendChild(nameplate(r.nick, r.tier || 'bronze', { title: r.title }));
       sub.textContent = `${shortSchool(r.schoolName)} · ${r.place}`;
     }
     who.append(top, sub);
@@ -1148,7 +1364,10 @@ async function loadRanking(type) {
     const big = document.createElement('b');
     const small = document.createElement('small');
     const rate = Math.round((r.wins / r.games) * 100);
-    if (type === 'winrate') {
+    if (type === 'tier') {
+      big.textContent = `${(r.rp || 0).toLocaleString('ko-KR')}점`;
+      small.textContent = `${tierInfo(r.tier).name} · ${r.wins}승`;
+    } else if (type === 'winrate') {
       big.textContent = `${rate}%`;
       small.textContent = `${r.wins}승 / ${r.games}판`;
     } else {
@@ -1234,7 +1453,9 @@ function renderRooms(list) {
     title.textContent = r.title;
     const host = document.createElement('span');
     host.className = 'r-host';
-    host.textContent = `방장: ${r.host || '-'}`;
+    host.append('방장 ');
+    if (r.host) host.appendChild(nameplate(r.host, r.hostTier || 'bronze', { small: true }));
+    else host.append('-');
     title.appendChild(host);
     const count = document.createElement('span');
     count.className = 'r-count';
@@ -1271,7 +1492,7 @@ function renderRoom() {
     dot.style.background = COLORS[i % COLORS.length].main;
     const name = document.createElement('span');
     name.className = 'p-name';
-    name.textContent = p.name + (p.id === myId ? ' (나)' : '');
+    name.appendChild(nameplate(p.name, p.tier || 'bronze', { title: p.title, suffix: p.id === myId ? '(나)' : '' }));
     const school = document.createElement('span');
     school.className = 'p-school';
     school.textContent = p.school || '';
@@ -1332,7 +1553,7 @@ roomNet.on('emote', (m) => receiveEmote(m.id, m.i));
 roomNet.on('playerDead', (m) => { if (match && match.mode === 'online') match.remoteDead(m.id); });
 roomNet.on('gameOver', (m) => {
   if (!match || match.mode !== 'online') return;
-  match.finish(m.winnerId === myId, m.winner, m.recorded);
+  match.finish(m.winnerId === myId, m.winner, m.recorded, m.results ? m.results[myId] : null);
 });
 roomNet.on('disconnected', () => {
   currentRoom = null;

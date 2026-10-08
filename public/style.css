@@ -600,9 +600,9 @@ body.touch .touch-controls { display: flex; }
   font-size: 14px;
   flex: 0 0 auto;
 }
-.rank-list li:nth-child(1) .rk { background: #ffd23f; color: #4a3200; box-shadow: 0 0 12px rgba(255, 210, 63, 0.7); }
-.rank-list li:nth-child(2) .rk { background: #d9dee8; color: #3a4253; box-shadow: 0 0 10px rgba(217, 222, 232, 0.5); }
-.rank-list li:nth-child(3) .rk { background: #f1b98a; color: #5a2b08; box-shadow: 0 0 10px rgba(241, 185, 138, 0.5); }
+.rank-list li.top1 .rk { background: #ffd23f; color: #4a3200; box-shadow: 0 0 12px rgba(255, 210, 63, 0.7); }
+.rank-list li.top2 .rk { background: #d9dee8; color: #3a4253; box-shadow: 0 0 10px rgba(217, 222, 232, 0.5); }
+.rank-list li.top3 .rk { background: #f1b98a; color: #5a2b08; box-shadow: 0 0 10px rgba(241, 185, 138, 0.5); }
 .rank-list .who { flex: 1; min-width: 0; }
 .rank-list .who div { font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rank-list .who small { color: var(--ink-soft); font-size: 13px; }
@@ -944,3 +944,264 @@ body.portrait .dock-quit .btn { font-size: 14px; padding: 6px 14px; }
 .result-emotes .emote-btn { font-size: 13px; padding: 7px 2px; }
 /* 상용구가 더해져 결과 창이 길어지므로, 작은 휴대폰에서는 창 안에서 스크롤 */
 #overlay-result .modal { max-height: calc(100% - 24px); overflow-y: auto; }
+
+
+/* =====================================================================
+   티어 이름표 (롤 랭크처럼 이름 옆에 따라다님)
+   각 티어: --t-hi(밝은), --t-mid, --t-lo(어두운), 바탕 --t-bg1→--t-bg2, 테두리 --t-line, 빛 --t-glow
+   ===================================================================== */
+.t-bronze      { --t-hi: #ffd2ad; --t-mid: #cd7f45; --t-lo: #6b3615; --t-bg1: #3d1f0c; --t-bg2: #7a4219; --t-line: #d98f58; --t-glow: rgba(217, 143, 88, 0.35); --t-ink: #ffe4cf; }
+.t-silver      { --t-hi: #ffffff; --t-mid: #b9c6d6; --t-lo: #56657a; --t-bg1: #2a3342; --t-bg2: #5b6a80; --t-line: #dbe4ef; --t-glow: rgba(219, 228, 239, 0.4); --t-ink: #f4f8ff; }
+.t-gold        { --t-hi: #fff6c4; --t-mid: #ffc93c; --t-lo: #9a6407; --t-bg1: #4a3000; --t-bg2: #a8740d; --t-line: #ffd75e; --t-glow: rgba(255, 201, 60, 0.6); --t-ink: #fff4c9; }
+.t-platinum    { --t-hi: #d6fff7; --t-mid: #3fe0c5; --t-lo: #0d6e62; --t-bg1: #06322e; --t-bg2: #138a7d; --t-line: #6ff7e0; --t-glow: rgba(63, 224, 197, 0.6); --t-ink: #dcfff8; }
+.t-diamond     { --t-hi: #eaf4ff; --t-mid: #6aa8ff; --t-lo: #2346b0; --t-bg1: #0e1d5c; --t-bg2: #3264d8; --t-line: #a9d0ff; --t-glow: rgba(106, 168, 255, 0.7); --t-ink: #eef6ff; }
+.t-master      { --t-hi: #f7e2ff; --t-mid: #c56bff; --t-lo: #5e169c; --t-bg1: #2a0750; --t-bg2: #7b28cf; --t-line: #e3adff; --t-glow: rgba(197, 107, 255, 0.75); --t-ink: #fbefff; }
+.t-grandmaster { --t-hi: #ffe0e0; --t-mid: #ff4f5e; --t-lo: #8a0c1b; --t-bg1: #3d0309; --t-bg2: #c2182c; --t-line: #ff8f99; --t-glow: rgba(255, 79, 94, 0.8); --t-ink: #fff0f1; }
+.t-challenger  { --t-hi: #fffbe0; --t-mid: #ffd76a; --t-lo: #1f7fd6; --t-bg1: #0b2a55; --t-bg2: #6b4a00; --t-line: #ffe58a; --t-glow: rgba(120, 220, 255, 0.85); --t-ink: #fffbe8; }
+
+.np-wrap { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; vertical-align: middle; flex-wrap: wrap; }
+.np {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px 10px 2px 4px;
+  border-radius: 10px;
+  border: 2px solid var(--t-line);
+  background: linear-gradient(135deg, var(--t-bg1), var(--t-bg2) 55%, var(--t-bg1) 120%);
+  color: var(--t-ink);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 8px var(--t-glow), inset 0 0 8px rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.np-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.np-suffix { font-size: 0.65em; opacity: 0.8; margin-left: 2px; }
+.np-emb { width: 1.45em; height: 1.45em; flex: 0 0 auto; filter: drop-shadow(0 0 3px var(--t-glow)); overflow: visible; }
+.np-emb .e-out { fill: var(--t-lo); stroke: var(--t-hi); stroke-width: 1; }
+.np-emb .e-in { fill: var(--t-mid); }
+.np-emb .e-gem { fill: var(--t-hi); opacity: 0.95; }
+.np-emb .e-crown { fill: #ffe066; stroke: #8a5a00; stroke-width: 0.5; }
+.np-emb .e-wing { fill: var(--t-mid); opacity: 0.9; }
+.np-sm { font-size: 0.85em; padding: 1px 7px 1px 3px; border-width: 1.5px; border-radius: 8px; }
+.np-title {
+  font-size: 0.72em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  white-space: nowrap;
+  text-shadow: none;
+}
+
+/* 골드부터: 금속처럼 반짝이는 바탕 */
+.np.t-gold, .np.t-platinum, .np.t-diamond, .np.t-master {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.28), transparent 38%, transparent 62%, rgba(255, 255, 255, 0.12)),
+    linear-gradient(135deg, var(--t-bg1), var(--t-bg2) 55%, var(--t-bg1) 120%);
+}
+/* 플래티넘부터: 이름 글씨에 빛나는 색 */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .np.t-platinum .np-name, .np.t-diamond .np-name, .np.t-master .np-name,
+  .np.t-grandmaster .np-name, .np.t-challenger .np-name {
+    background: linear-gradient(180deg, #fff 20%, var(--t-hi) 60%, var(--t-mid));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: none;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.7));
+  }
+  .np.t-challenger .np-name { background-image: linear-gradient(180deg, #fffbe0 15%, #ffe066 55%, #6ff7ff); }
+}
+
+/* 골드부터: 이름표 위로 빛이 스르륵 지나감 */
+.np.t-gold::after, .np.t-platinum::after, .np.t-diamond::after,
+.np.t-master::after, .np.t-grandmaster::after, .np.t-challenger::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: skewX(-20deg);
+  animation: np-shine 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+.np.t-diamond::after { animation-duration: 2.6s; }
+.np.t-master::after, .np.t-grandmaster::after { animation-duration: 2.2s; }
+.np.t-challenger::after { animation-duration: 1.8s; }
+@keyframes np-shine { 0% { left: -60%; } 60%, 100% { left: 130%; } }
+
+/* 다이아: 반짝이는 별 */
+.np.t-diamond::before {
+  content: '✦';
+  position: absolute;
+  right: 3px;
+  top: -2px;
+  font-size: 9px;
+  color: #fff;
+  animation: np-twinkle 1.6s ease-in-out infinite;
+}
+@keyframes np-twinkle { 0%, 100% { opacity: 0.1; transform: scale(0.6); } 50% { opacity: 1; transform: scale(1.1); } }
+
+/* 마스터: 진한 보랏빛 */
+.np.t-master { box-shadow: 0 0 12px var(--t-glow), 0 0 22px rgba(197, 107, 255, 0.35), inset 0 0 10px rgba(255, 255, 255, 0.12); }
+
+/* 그랜드마스터: 불꽃처럼 일렁이는 빛 */
+.np.t-grandmaster {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.22), transparent 40%),
+    linear-gradient(135deg, #3d0309, #b3121f 50%, #ff6a2b 115%);
+  animation: np-flame 1.4s ease-in-out infinite;
+}
+.np-emb .e-wing { fill: var(--t-mid); }
+.t-challenger .np-emb .e-wing { fill: #ffe066; }
+@keyframes np-flame {
+  0%, 100% { box-shadow: 0 0 10px var(--t-glow), 0 0 20px rgba(255, 120, 60, 0.35), inset 0 0 10px rgba(255, 180, 120, 0.15); }
+  50% { box-shadow: 0 0 16px var(--t-glow), 0 0 30px rgba(255, 140, 60, 0.55), inset 0 0 14px rgba(255, 200, 140, 0.25); }
+}
+
+/* 챌린저: 금빛과 하늘빛이 도는 무지개 테두리 */
+.np.t-challenger {
+  border-color: transparent;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.22), transparent 40%) padding-box,
+    linear-gradient(135deg, #2a1660, #123f73 50%, #6b4a00 110%) padding-box,
+    linear-gradient(90deg, #ffe066, #6ff7ff, #ff8ae2, #ffe066, #6ff7ff) border-box;
+  background-size: 100% 100%, 100% 100%, 300% 100%;
+  border-width: 2.5px;
+  animation: np-rainbow 2.4s linear infinite, np-chal 2s ease-in-out infinite;
+}
+@keyframes np-rainbow { from { background-position: 0 0, 0 0, 0% 0; } to { background-position: 0 0, 0 0, 150% 0; } }
+@keyframes np-chal {
+  0%, 100% { box-shadow: 0 0 12px rgba(255, 224, 102, 0.7), 0 0 24px rgba(111, 247, 255, 0.4); }
+  50% { box-shadow: 0 0 18px rgba(111, 247, 255, 0.8), 0 0 34px rgba(255, 138, 226, 0.45); }
+}
+.np-chip { font-size: 15px; }
+
+/* 게임 판의 이름 자리 */
+.panel-name.has-np { text-shadow: none; overflow: visible; padding: 4px; margin: -4px; }
+.panel-name.has-np .np-wrap { flex-wrap: nowrap; }
+.panel-name.has-np .np { font-size: 20px; }
+body.portrait .panel.self .panel-name.has-np .np { font-size: 17px; }
+.panel.small .panel-name.has-np .np { font-size: 15px; }
+.panel.tiny .panel-name.has-np .np { font-size: 12px; }
+.panel-name.has-np .np-title { display: none; } /* 게임 중에는 티어만 (칭호는 대기실·랭킹·결과에서) */
+.player-list .p-name .np-wrap { margin-right: 4px; }
+.room-list .r-host .np { font-size: 13px; }
+.rank-list .who div { overflow: visible; }
+.rank-list .who .np { font-size: 16px; }
+
+/* ---------- 홈 화면 내 티어 카드 ---------- */
+.my-record { text-align: left; }
+.my-tier {
+  padding: 10px 12px 10px;
+  border-radius: 16px;
+  border: 1.5px solid var(--t-line);
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.15)), linear-gradient(135deg, var(--t-bg1), transparent 70%);
+  box-shadow: 0 0 14px var(--t-glow);
+}
+.mt-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mt-head .np { font-size: 19px; }
+.mt-book { flex: 0 0 auto; font-size: 13px; padding: 5px 10px; }
+.mt-line { margin-top: 6px; font-size: 15px; color: var(--ink); }
+.my-tier .mt-tier { font-weight: normal; color: var(--t-hi); text-shadow: 0 0 8px var(--t-glow); }
+.mt-rp { color: var(--yellow); }
+.mt-bar { height: 9px; margin-top: 5px; border-radius: 99px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.mt-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--t-mid, var(--cyan)), var(--t-hi, #fff)); box-shadow: 0 0 8px var(--t-glow, rgba(79, 240, 255, 0.6)); transition: width 0.9s cubic-bezier(.2, .8, .2, 1); }
+.mt-note { display: block; margin-top: 3px; font-size: 12px; color: var(--ink-soft); }
+.mt-stats { margin-top: 6px; font-size: 13px; color: var(--ink-soft); }
+
+/* ---------- 랭킹: 이번 주 / 전체 ---------- */
+.period-tabs { display: flex; justify-content: center; gap: 6px; margin-bottom: 8px; }
+.period-tabs button {
+  font: inherit;
+  font-size: 15px;
+  padding: 5px 16px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255, 228, 92, 0.5);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.period-tabs button.on { background: rgba(255, 228, 92, 0.18); color: var(--yellow); box-shadow: 0 0 10px rgba(255, 228, 92, 0.4); }
+.tabs button[hidden] { display: none; }
+.rank-list li.champ { justify-content: center; font-size: 15px; color: var(--yellow); border-color: rgba(255, 228, 92, 0.6); background: rgba(255, 228, 92, 0.08); }
+
+/* ---------- 결과 화면: 티어 변화 ---------- */
+.result-tier { margin: 8px 0 4px; padding: 10px 12px; border-radius: 16px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--glass-line); }
+.result-tier[hidden] { display: none; }
+.rt-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.rt-rp { font-size: 18px; color: var(--ink); }
+.rt-diff { font-family: var(--digits); font-weight: 900; font-size: 20px; color: var(--ink-soft); }
+.rt-diff.plus { color: #5dff9e; text-shadow: 0 0 10px rgba(93, 255, 158, 0.8); animation: pop 0.5s; }
+.rt-diff.minus { color: #ff8f99; }
+.result-tier .mt-bar { margin-top: 8px; }
+.result-tier .mt-bar i { background: linear-gradient(90deg, var(--cyan), #fff); }
+.new-title {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgba(255, 79, 216, 0.25), rgba(122, 92, 255, 0.25));
+  border: 1.5px solid var(--pink);
+  color: #fff;
+  font-size: 16px;
+  box-shadow: 0 0 12px rgba(255, 79, 216, 0.5);
+  animation: pop 0.5s;
+}
+/* 승급 연출 */
+.promo { position: relative; padding: 10px 0 8px; margin-bottom: 6px; text-align: center; overflow: hidden; border-radius: 14px; }
+.promo .np-chip { font-size: 26px; padding: 4px 16px 4px 8px; animation: promo-in 0.8s cubic-bezier(.2, 1.6, .4, 1); position: relative; z-index: 1; }
+.promo-text { position: relative; z-index: 1; margin-top: 6px; font-size: 24px; color: var(--t-hi); text-shadow: 0 0 12px var(--t-glow), 0 0 24px var(--t-glow); animation: pop 0.6s 0.3s both; }
+.promo-burst {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 260px;
+  height: 260px;
+  margin: -130px 0 0 -130px;
+  background: repeating-conic-gradient(from 0deg, var(--t-glow) 0deg 10deg, transparent 10deg 30deg);
+  border-radius: 50%;
+  -webkit-mask: radial-gradient(circle, #000 20%, transparent 70%);
+  mask: radial-gradient(circle, #000 20%, transparent 70%);
+  animation: promo-spin 6s linear infinite, promo-fade 0.8s ease-out;
+}
+@keyframes promo-in { 0% { transform: scale(0.2) rotate(-20deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+@keyframes promo-spin { to { transform: rotate(360deg); } }
+@keyframes promo-fade { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; } }
+
+/* ---------- 칭호 도감 ---------- */
+.title-modal { width: min(620px, 100%); max-height: 100%; overflow-y: auto; text-align: left; }
+.title-modal h2 { text-align: center; font-size: 30px; }
+.title-modal h2 small { font-size: 16px; color: var(--ink-soft); text-shadow: none; }
+.title-modal > p { text-align: center; margin: 0 0 6px; }
+.title-list h3 { margin: 12px 0 6px; font-size: 16px; color: var(--cyan-soft); font-weight: normal; }
+.title-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.title-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--glass-line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: default;
+}
+.title-card .tc-icon { grid-row: span 2; font-size: 22px; opacity: 0.6; }
+.title-card .tc-name { font-size: 15px; }
+.title-card .tc-desc { font-size: 11px; opacity: 0.8; }
+.title-card.got { color: #fff; border-color: rgba(255, 79, 216, 0.6); background: rgba(255, 79, 216, 0.12); cursor: pointer; }
+.title-card.got .tc-icon { opacity: 1; }
+.title-card.on { border-color: var(--yellow); box-shadow: 0 0 12px rgba(255, 228, 92, 0.6); background: rgba(255, 228, 92, 0.14); }
+.title-card.soon { opacity: 0.55; border-style: dashed; }
+@media (max-width: 420px) { .title-grid { grid-template-columns: minmax(0, 1fr); } }

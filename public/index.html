@@ -68,6 +68,18 @@
         <a class="maker-link" href="https://blog.naver.com/ai_classroom" target="_blank" rel="noopener">AI 수업 아카이브 · 채쌤 블로그 ↗</a>
       </div>
     </div>
+    <!-- 칭호 도감: 얻은 칭호를 눌러 대표 칭호로 -->
+    <div class="overlay qr-overlay" id="overlay-titles">
+      <div class="modal title-modal" role="dialog" aria-modal="true" aria-labelledby="title-book-h">
+        <h2 id="title-book-h">칭호 도감 <small id="title-count"></small></h2>
+        <p>얻은 칭호를 누르면 이름표 옆에 달려요.</p>
+        <div class="title-list" id="title-list"></div>
+        <div class="btn-row wide">
+          <button class="btn soft" id="title-none">칭호 안 달기</button>
+          <button class="btn primary" id="btn-titles-close">닫기</button>
+        </div>
+      </div>
+    </div>
     <!-- 교실 화면에 띄워서 학생들이 휴대폰으로 찍고 들어오게 -->
     <div class="overlay qr-overlay" id="overlay-qr">
       <div class="modal qr-modal" role="dialog" aria-modal="true" aria-labelledby="qr-title">
@@ -113,9 +125,14 @@
   <section id="screen-ranking" class="screen">
     <div class="menu-card ranking">
       <h1 class="title-sm">랭킹</h1>
+      <div class="period-tabs" id="rank-period">
+        <button data-period="week">이번 주</button>
+        <button data-period="all" class="on">전체</button>
+      </div>
       <div class="tabs" id="rank-tabs">
-        <button data-rank="winrate">승률</button>
+        <button data-rank="tier">티어</button>
         <button data-rank="wins" class="on">승리 횟수</button>
+        <button data-rank="winrate">승률</button>
         <button data-rank="school">학교</button>
       </div>
       <p class="rank-note" id="rank-note"></p>
@@ -233,6 +250,7 @@
       <div class="modal">
         <h2 id="result-title">승리!</h2>
         <p id="result-sub"></p>
+        <div class="result-tier" id="result-tier" hidden></div>
         <div class="result-stats" id="result-stats"></div>
         <div class="result-emotes" id="result-emotes" hidden>
           <ul class="emote-log" id="result-emote-log"></ul>
