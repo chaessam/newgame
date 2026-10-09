@@ -337,14 +337,16 @@ export class Lobby extends DurableObject {
   // ---- 로그인 ----
 
   // IP마다 너무 많이 시도하면 잠깐 막음 (한 교실이 같은 IP를 쓰므로 넉넉하게)
-  limited(ip, kind, max, windowMs) {
+  // IP는 알아볼 수 없게 해시로 바꿔 저장하고, 지난 기간 기록은 바로 지움 (개인정보처리방침)
+  async limited(ip, kind, max, windowMs) {
+    const key = (await sha256(`gugupang-limit:${ip}`)).slice(0, 32);
     const w = Math.floor(Date.now() / windowMs);
+    this.sql.exec('DELETE FROM ip_limits WHERE kind = ? AND win < ?', kind, w);
     this.sql.exec(
       'INSERT INTO ip_limits (ip, kind, win, count) VALUES (?, ?, ?, 1) ON CONFLICT (ip, kind, win) DO UPDATE SET count = count + 1',
-      ip, kind, w,
+      key, kind, w,
     );
-    const row = this.sql.exec('SELECT count FROM ip_limits WHERE ip = ? AND kind = ? AND win = ?', ip, kind, w).one();
-    if (Math.random() < 0.02) this.sql.exec('DELETE FROM ip_limits WHERE win < ?', w - 2);
+    const row = this.sql.exec('SELECT count FROM ip_limits WHERE ip = ? AND kind = ? AND win = ?', key, kind, w).one();
     return row.count > max;
   }
 
@@ -378,7 +380,7 @@ export class Lobby extends DurableObject {
   // body: { schoolCode, nick, pin, create }
   // 계정이 없으면 { code: 'no_account', hasRecord } — 화면에서 확인을 받은 뒤 create: true로 다시 보냄
   async login(body, ip) {
-    if (this.limited(ip, 'login', 600, 3600 * 1000)) return { ok: false, status: 429, error: '잠시 후 다시 해 주세요.' };
+    if (await this.limited(ip, 'login', 600, 3600 * 1000)) return { ok: false, status: 429, error: '잠시 후 다시 해 주세요.' };
     const id = await checkIdentity(this.env, body.schoolCode, body.nick);
     if (id.error) return { ok: false, error: id.error };
     const pin = String(body.pin || '');
@@ -392,7 +394,7 @@ export class Lobby extends DurableObject {
         'SELECT 1 FROM players WHERE school = ? AND nick = ?', school, nick,
       ).toArray().length > 0;
       if (!body.create) return { ok: false, code: 'no_account', hasRecord };
-      if (this.limited(ip, 'register', 300, DAY_MS)) {
+      if (await this.limited(ip, 'register', 300, DAY_MS)) {
         return { ok: false, status: 429, error: '오늘 이 곳에서 만든 계정이 너무 많아요. 내일 다시 해 주세요.' };
       }
       const salt = randomHex(16);

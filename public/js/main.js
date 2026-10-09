@@ -1315,6 +1315,26 @@ document.addEventListener('pointerdown', (e) => {
   showEmotePop(false);
 });
 
+// ---------------- 업데이트 안내 · 개인정보처리방침 ----------------
+// 새 안내가 생기면 NOTICE_VERSION을 바꾸면 기기마다 한 번 자동으로 떠요.
+const NOTICE_VERSION = '2026-10-tier-login';
+function showOverlay(id, show) { $(id).classList.toggle('show', show); }
+$('btn-notice').onclick = () => showOverlay('overlay-notice', true);
+$('btn-notice-close').onclick = () => {
+  showOverlay('overlay-notice', false);
+  store.set('gugu-notice', NOTICE_VERSION);
+};
+$('btn-privacy').onclick = () => showOverlay('overlay-privacy', true);
+$('btn-privacy-close').onclick = () => showOverlay('overlay-privacy', false);
+for (const id of ['overlay-notice', 'overlay-privacy']) {
+  $(id).addEventListener('click', (e) => {
+    if (e.target.id !== id) return;
+    if (id === 'overlay-notice') store.set('gugu-notice', NOTICE_VERSION);
+    showOverlay(id, false);
+  });
+}
+if (store.get('gugu-notice') !== NOTICE_VERSION) showOverlay('overlay-notice', true);
+
 // ---------------- QR 공유 ----------------
 
 const SHARE_URL = 'https://gugupang.chaessam.workers.dev/';
