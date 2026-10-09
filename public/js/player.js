@@ -12,6 +12,34 @@ const LOCK_DELAY = 0.5;    // 바닥에 닿은 뒤 고정까지 시간
 const POP_TIME = 0.5;      // 터지는 연출 시간
 const WRONG_LOCKOUT = 2.0; // 오답 후 다시 입력할 수 있을 때까지 시간
 
+// 터짐 연출 하나 넣기: 불꽃 입자(fxEvents) + 터진 자리 근처의 연쇄 글자
+function pushFx(view, cells, chain, delay) {
+  if (view.fxEvents.length > 20) view.fxEvents.shift(); // 그리지 않는 판에 쌓이지 않게
+  view.fxEvents.push({ cells, chain, delay });
+  const pop = chainPopup(chain);
+  if (cells.length) {
+    let sx = 0, sy = 0;
+    for (const [x, y] of cells) { sx += x + 0.5; sy += y + 0.5; }
+    pop.gx = sx / cells.length;
+    pop.gy = sy / cells.length;
+  }
+  if (delay) pop.t = -delay;
+  view.popups.push(pop);
+}
+
+// 연쇄 글자: 1번째는 "펑!", 2연쇄부터 크게, 4연쇄부터는 칭찬 한마디
+const CHAIN_CHEERS = ['', '', '', '', '대단해!', '굉장해!', '전설이야!!'];
+export function chainPopup(chain) {
+  return {
+    text: chain === 1 ? '펑!' : `${chain}연쇄!`,
+    sub: CHAIN_CHEERS[Math.min(chain, CHAIN_CHEERS.length - 1)],
+    kind: 'chain',
+    chain,
+    t: 0,
+    life: chain >= 2 ? 1.5 + Math.min(chain, 6) * 0.1 : 1.0,
+  };
+}
+
 export class PlayerGame {
   constructor({ seed = 1, colors = 4, name = '', askQuestions = true } = {}) {
     this.name = name;
@@ -38,6 +66,8 @@ export class PlayerGame {
     this.lockout = 0;
     this.time = 0;
     this.popups = [];
+    this.fxEvents = []; // 터진 자리 → 화면 연출 (render.js가 꺼내 씀)
+    this.garbageRate = 1; // 구구팡 타임이면 1.5 (보내는 방해 슬라임 배수)
     this.stats = { questions: 0, correct: 0, wrong: 0, firstTry: 0, maxChain: 0, sent: 0 };
     this.listeners = {};
   }
@@ -251,13 +281,16 @@ export class PlayerGame {
     const groups = this.popGroups;
     const step = scoreStep(groups, this.chain);
     this.score += step;
+    // 터지는 자리와 색 (연출용) — 지우기 전에 기억
+    const cells = [];
+    for (const g of groups) for (const [x, y] of g.cells) cells.push([x, y, this.board[y][x] ? this.board[y][x].c : 0]);
     clearGroups(this.board, groups);
     this.popGroups = null;
     this.stats.maxChain = Math.max(this.stats.maxChain, this.chain);
-    this.addPopup(`${this.chain}연쇄!`, 'chain');
+    pushFx(this, cells, this.chain, 0);
     this.emit('chain', { chain: this.chain, score: step });
 
-    let { count, leftover } = garbageFromScore(step, this.leftover);
+    let { count, leftover } = garbageFromScore(Math.round(step * this.garbageRate), this.leftover);
     this.leftover = leftover;
     if (this.allClearPending) { count += ALL_CLEAR_BONUS; this.allClearPending = false; }
     // 받을 방해 슬라임이 있으면 먼저 상쇄합니다.
@@ -348,6 +381,8 @@ export class RemoteView {
     this.chain = 0;
     this.question = null;
     this.popups = [];
+    this.fxEvents = [];
+    this.labelChain = 0; // 글자를 이미 띄운 연쇄 번호 (같은 연쇄를 두 번 띄우지 않게)
     this.time = 0;
   }
 
@@ -370,7 +405,18 @@ export class RemoteView {
     // 터지는 중이면 실제로 연결된 묶음만 깜빡이게 표시
     if (s.st === 'pop') {
       const groups = findGroups(this.board);
-      for (const g of groups) for (const [x, y] of g.cells) this.board[y][x].pop = true;
+      const cells = [];
+      for (const g of groups) {
+        for (const [x, y] of g.cells) {
+          this.board[y][x].pop = true;
+          cells.push([x, y, this.board[y][x].c]);
+        }
+      }
+      // 상대 화면은 터지기 시작할 때 소식이 오므로, 깜빡임이 끝날 즈음 불꽃이 튀도록 조금 늦춤
+      if (s.ch > 0 && this.labelChain !== s.ch && cells.length) {
+        this.labelChain = s.ch;
+        pushFx(this, cells, s.ch, 0.35);
+      }
     }
     if (s.st === 'question') {
       for (const g of findGroups(this.board)) for (const [x, y] of g.cells) this.board[y][x].grp = true;
@@ -384,7 +430,12 @@ export class RemoteView {
         [{ c: n[4], n: n[5] }, { c: n[6], n: n[7] }],
       ];
     }
-    if (s.ch > this.chain && s.ch > 0) this.popups.push({ text: `${s.ch}연쇄!`, kind: 'chain', t: 0, life: 1.4 });
+    // 터지는 순간의 소식을 놓쳤으면 글자만이라도
+    if (s.ch > this.chain && s.ch > 0 && this.labelChain !== s.ch) {
+      this.labelChain = s.ch;
+      this.popups.push(chainPopup(s.ch));
+    }
+    if (!s.ch) this.labelChain = 0;
     this.chain = s.ch | 0;
     this.score = s.s | 0;
     this.pendingIn = s.pi | 0;

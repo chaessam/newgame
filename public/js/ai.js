@@ -37,16 +37,25 @@ function colTop(g, x) {
   return -1;
 }
 
-function dropPuyo(g, x, c) {
+function dropPiece(g, x, c) {
   const y = colTop(g, x);
   if (y >= 0) g[y * W + x] = c;
   return y;
 }
 
 export function placePair(g, x, r, ca, cb) {
-  if (r === 0) { dropPuyo(g, x, ca); dropPuyo(g, x, cb); }
-  else if (r === 2) { dropPuyo(g, x, cb); dropPuyo(g, x, ca); }
-  else { dropPuyo(g, x, ca); dropPuyo(g, x + ROT_OFFSETS[r][0], cb); }
+  if (r === 0) { dropPiece(g, x, ca); dropPiece(g, x, cb); }
+  else if (r === 2) { dropPiece(g, x, cb); dropPiece(g, x, ca); }
+  else { dropPiece(g, x, ca); dropPiece(g, x + ROT_OFFSETS[r][0], cb); }
+}
+
+// placePair와 같은 순서로 놓고, 두 슬라임이 내려앉은 칸을 돌려줌 (놓을 수 없으면 null)
+function placePairCells(g, x, r, ca, cb) {
+  const xb = x + ROT_OFFSETS[r][0];
+  let ya, yb;
+  if (r === 2) { yb = dropPiece(g, xb, cb); ya = dropPiece(g, x, ca); } else { ya = dropPiece(g, x, ca); yb = dropPiece(g, xb, cb); }
+  if (ya < 0 || yb < 0) return null;
+  return [{ x, y: ya, piece: 'a' }, { x: xb, y: yb, piece: 'b' }];
 }
 
 const visited = new Uint8Array(N);
@@ -121,10 +130,10 @@ function potentialChain(g, colors) {
     if (colTop(g, x) < 2) continue;
     for (let c = 0; c < colors; c++) {
       const t = g.slice();
-      dropPuyo(t, x, c);
+      dropPiece(t, x, c);
       let r = simulateGrid(t.slice());
       if (r.chain === 0) {
-        dropPuyo(t, x, c);
+        dropPiece(t, x, c);
         r = simulateGrid(t);
       }
       if (r.chain > best) best = r.chain;
@@ -249,6 +258,26 @@ export function choosePlacement(game, lvl, oppPending = 0) {
 }
 
 // 컴퓨터가 실제로 키를 누르듯 조금씩 움직입니다.
+// 연쇄 가이드 (혼자 연습): 지금 떨어지는 두 개를 어디에 놓으면 minChain연쇄 이상이 터지는지
+// 가장 긴 연쇄(같으면 점수가 큰 쪽)를 { x, r, chain, cells } 로, 없으면 null
+export function chainHint(board, pair, minChain = 2) {
+  if (!pair) return null;
+  const g0 = toGrid(board);
+  let best = null;
+  for (const pl of ALL_PLACEMENTS) {
+    if (!reachable(g0, pl.x, pl.r)) continue;
+    const g = g0.slice();
+    const cells = placePairCells(g, pl.x, pl.r, pair.a.c, pair.b.c);
+    if (!cells) continue;
+    const sim = simulateGrid(g);
+    if (sim.chain < minChain) continue;
+    if (!best || sim.chain > best.chain || (sim.chain === best.chain && sim.score > best.score)) {
+      best = { x: pl.x, r: pl.r, chain: sim.chain, score: sim.score, cells };
+    }
+  }
+  return best;
+}
+
 export class CpuController {
   constructor(game, levelKey, getOppPending = () => 0) {
     this.game = game;

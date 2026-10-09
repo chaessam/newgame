@@ -12,7 +12,7 @@ export const MAX_GARBAGE_DROP = 30;   // 한 번에 떨어지는 방해 슬라�
 // 회전 상태별 자식 슬라임 위치 (0: 위, 1: 오른쪽, 2: 아래, 3: 왼쪽)
 export const ROT_OFFSETS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
-// 원작(통) 규칙의 연쇄 보너스 / 색 보너스 / 연결 보너스
+// 연쇄 보너스 / 색 보너스 / 연결 보너스 (연쇄 퍼즐에서 흔히 쓰는 점수 계산)
 export const CHAIN_POWER = [0, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 480, 512];
 export const COLOR_BONUS = [0, 3, 6, 12, 24];
 export function groupBonus(n) {
@@ -53,7 +53,7 @@ export class PairQueue {
   }
   _gen() {
     const r = this.rng;
-    // 원작처럼 처음 두 쌍은 3가지 색 안에서만 나옵니다.
+    // 처음 두 쌍은 3가지 색 안에서만 나옵니다. (시작부터 너무 어렵지 않게)
     const nc = this.list.length < 2 ? Math.min(3, this.colors) : this.colors;
     const mk = () => ({ c: Math.floor(r() * nc), n: 1 + Math.floor(r() * 9) });
     return [mk(), mk()];

@@ -31,7 +31,7 @@ test('3개는 터지지 않고, 숨은 행은 연결에 포함되지 않는다',
   assert.equal(findGroups(b2).length, 0);
 });
 
-test('2연쇄 계산과 점수 (원작 공식)', () => {
+test('2연쇄 계산과 점수', () => {
   const b = boardFromRows([
     'B.....',
     'RBBB..',
@@ -185,4 +185,48 @@ test('choosePlacement 는 놓을 수 있는 위치를 고른다', () => {
   g.update(0.016);
   const pl = choosePlacement(g, LEVELS.hard);
   assert.ok(pl.x >= 0 && pl.x < W && pl.r >= 0 && pl.r < 4);
+});
+
+test('연쇄 가이드: 2연쇄가 되는 자리를 찾음', async () => {
+  const { chainHint } = await import('../public/js/ai.js');
+  const { emptyBoard, makeCell } = await import('../public/js/core.js');
+  const b = emptyBoard();
+  const put = (x, y, c) => { b[y][x] = makeCell(c, 1); };
+  // 맨 아래 왼쪽: 빨강(0) 3개 위에 파랑(1) 3개 → 빨강 하나를 더하면 빨강이 터지고 파랑이 내려와 2연쇄 준비
+  // 0열: 아래부터 0,0,0 / 1열: 1,1,1 위에 아무것도 → 빨강+파랑 쌍을 세우면?
+  put(0, 12, 0); put(1, 12, 0); put(2, 12, 0);
+  put(0, 11, 1); put(1, 11, 1); put(2, 11, 1);
+  const pair = { a: { c: 0, n: 2 }, b: { c: 1, n: 3 } };
+  const h = chainHint(b, pair);
+  assert.ok(h, '자리를 찾아야 함');
+  assert.ok(h.chain >= 2, String(h.chain));
+  assert.equal(h.cells.length, 2);
+  // 연쇄가 안 되는 판에서는 null
+  assert.equal(chainHint(emptyBoard(), pair), null);
+});
+
+test('구구팡 타임: 보내는 방해 슬라임 1.5배, 터진 자리는 연출로 기록', async () => {
+  const { PlayerGame } = await import('../public/js/player.js');
+  const { findGroups, makeCell } = await import('../public/js/core.js');
+  const sent = (rate) => {
+    const g = new PlayerGame({ seed: 1 });
+    g.garbageRate = rate;
+    for (const [x, y] of [[0, 12], [1, 12], [2, 12], [3, 12]]) g.board[y][x] = makeCell(0, 1);
+    let n = 0;
+    g.on('attack', (k) => { n += k; });
+    g.chain = 1; // 2연쇄째 (연쇄 보너스 8)
+    g.startPop(findGroups(g.board));
+    g.finishPop();
+    return { n, g };
+  };
+  const normal = sent(1), ggp = sent(1.5);
+  assert.equal(normal.n, 4); // 10 × 4개 × 8 = 320점 → 70점마다 1개
+  assert.equal(ggp.n, 6);    // 480점 → 6개
+  // 연출: 터진 4칸과 2연쇄가 기록되고, 연쇄 글자는 터진 자리 근처에
+  const e = normal.g.fxEvents[0];
+  assert.equal(e.chain, 2);
+  assert.equal(e.cells.length, 4);
+  const pop = normal.g.popups.find((p) => p.kind === 'chain');
+  assert.equal(pop.text, '2연쇄!');
+  assert.ok(Math.abs(pop.gx - 2) < 1e-9 && Math.abs(pop.gy - 12.5) < 1e-9, `${pop.gx},${pop.gy}`);
 });

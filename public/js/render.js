@@ -1,5 +1,6 @@
 // 캔버스 그리기: 젤리 슬라임, 보드, 다음 슬라임, 방해 슬라임 예고
 import { W, H, GARBAGE, SPAWN_X, ROT_OFFSETS } from './core.js';
+import { updateFx, drawFxBackground, drawFxForeground, drawLabel } from './fx.js';
 
 export const COLORS = [
   { main: '#ff5d73', light: '#ffc2cb', dark: '#c22f4a' }, // 빨강
@@ -9,6 +10,8 @@ export const COLORS = [
   { main: '#a86cff', light: '#dcc4ff', dark: '#7440cc' }, // 보라
 ];
 const GARBAGE_COLOR = { main: '#aab3c2', light: '#e1e6ee', dark: '#6c7687' };
+// 불꽃 입자 색 (슬라임 색)
+const fxColor = (c) => (c === GARBAGE ? '#c9d1de' : (COLORS[c] || COLORS[0]).main);
 const FONT = '"Jua", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
 
 const dpr = () => Math.min(window.devicePixelRatio || 1, 2);
@@ -194,6 +197,10 @@ export function drawBoard(canvas, view, cs) {
   const rowY = (y) => (y - 1) * cs + pad;
   const b = view.board;
 
+  // 네온 연쇄 연출: 새로 터진 것을 효과로 바꾸고, 격자 번쩍임·빛기둥은 슬라임 아래에
+  const fx = updateFx(view, fxColor);
+  drawFxBackground(ctx, fx, cs, W, H, pad, bw, bh);
+
   // 같은 색끼리 이어진 부분 (말랑하게 붙어 보이도록)
   for (let y = 1; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -244,25 +251,14 @@ export function drawBoard(canvas, view, cs) {
     ctx.restore();
   }
 
+  // 연쇄 가이드 (혼자 연습): 놓으면 연쇄가 터지는 자리에 반투명 슬라임
+  if (view.hint && p && view.state === 'fall') drawHint(ctx, view.hint, p, cs, rowY, t);
+
   drawDanger(ctx, view.board, cs, pad, t);
 
-  // 연쇄 글자
-  for (const pop of view.popups || []) {
-    const k = pop.t / pop.life;
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, 1 - k * k);
-    ctx.font = `${Math.round(cs * (pop.kind === 'allclear' ? 0.8 : 1.05))}px ${FONT}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = cs * 0.18;
-    ctx.strokeStyle = '#3a1d6e';
-    const ty = bh * 0.42 - k * cs * 1.2;
-    ctx.strokeText(pop.text, bw / 2, ty);
-    ctx.fillStyle = pop.kind === 'allclear' ? '#7ff3ff' : '#ffe14d';
-    ctx.fillText(pop.text, bw / 2, ty);
-    ctx.restore();
-  }
+  // 불꽃 입자·충격파·번쩍임은 슬라임 위에, 그 위에 네온 간판 글씨
+  drawFxForeground(ctx, fx, cs, pad, bw, bh);
+  for (const pop of view.popups || []) drawLabel(ctx, pop, cs, pad, bw, bh);
 
   if (view.isDead) {
     ctx.fillStyle = 'rgba(10,10,30,0.6)';
@@ -272,6 +268,43 @@ export function drawBoard(canvas, view, cs) {
     ctx.fillStyle = '#fff';
     ctx.fillText('끝!', bw / 2, bh / 2);
   }
+}
+
+// 연쇄 가이드: 놓을 자리에 반투명 슬라임 + 깜빡이는 테두리 + "N연쇄!" 표시
+function drawHint(ctx, hint, pair, cs, rowY, t) {
+  const pulse = 0.5 + 0.5 * Math.sin(t * 6);
+  let top = Infinity, topX = 0;
+  for (const cell of hint.cells) {
+    const piece = cell.piece === 'a' ? pair.a : pair.b;
+    const px = cell.x * cs, py = rowY(cell.y);
+    ctx.save();
+    ctx.globalAlpha = 0.45 + 0.2 * pulse;
+    drawSlime(ctx, px, py, cs, { c: piece.c, n: piece.n });
+    ctx.restore();
+    ctx.save();
+    ctx.setLineDash([cs * 0.16, cs * 0.1]);
+    ctx.lineDashOffset = -t * cs * 0.6;
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.55 + 0.45 * pulse})`;
+    ctx.lineWidth = cs * 0.07;
+    roundRect(ctx, px + cs * 0.06, py + cs * 0.06, cs * 0.88, cs * 0.88, cs * 0.3);
+    ctx.stroke();
+    ctx.restore();
+    if (py < top) { top = py; topX = px; }
+  }
+  const label = `💡 ${hint.chain}연쇄!`;
+  ctx.save();
+  ctx.font = `${Math.round(cs * 0.42)}px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  const lx = Math.min(Math.max(topX + cs / 2, cs * 1.1), W * cs - cs * 1.1);
+  const ly = Math.max(cs * 0.55, top - cs * 0.08);
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = cs * 0.12;
+  ctx.strokeStyle = '#2a1060';
+  ctx.strokeText(label, lx, ly);
+  ctx.fillStyle = '#ffe14d';
+  ctx.fillText(label, lx, ly);
+  ctx.restore();
 }
 
 // 다음 슬라임 한 쌍을 세로로 (위: 자식, 아래: 축)
