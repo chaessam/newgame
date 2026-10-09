@@ -88,6 +88,12 @@
         <div class="modal-body">
           <p class="doc-date">2026년 10월</p>
           <section class="notice-item key">
+            <h3>🔥 새로 생겼어요: 구구팡 타임!</h3>
+            <p>온라인·컴퓨터 대결이 <b>1분 30초</b>를 넘기면 구구팡 타임이 시작돼요. 보내는 <b>방해 슬라임이 1.5배</b>, 음악도 빨라져요. 5초 전부터 화면 위에 알려 줘요.</p>
+            <p>✨ 연쇄가 터질 때 네온 불꽃이 팡팡! 연쇄가 길수록 더 화려해져요.</p>
+            <p>💡 <b>혼자 연습</b>에서는 연쇄 가이드가 놓으면 연쇄가 터지는 자리를 알려 줘요.</p>
+          </section>
+          <section class="notice-item">
             <h3>🔐 이제 비밀번호로 들어가요</h3>
             <p><b>학교 + 닉네임 + 숫자 4자리 비밀번호</b>로 들어가요. 다른 기기에서도 같은 비밀번호로 들어가면 기록이 그대로예요.</p>
             <p><b>예전에 하던 친구는?</b> 원래 쓰던 학교와 닉네임을 적고, 처음 들어올 때 비밀번호를 정하면 <b>그동안의 기록이 그대로 이어져요.</b> 앞으로는 그 비밀번호로 들어와요.</p>
@@ -201,6 +207,8 @@
         <li>왼쪽에서 세 번째 줄 맨 위까지 쌓이면 져요. 그 줄이 거의 다 차면 맨 위 칸이 <b>빨갛게 깜빡이며</b> 알려 줘요.</li>
         <li>처음 화면에서 <b>학교 + 닉네임 + 숫자 4자리 비밀번호</b>로 들어가요. 다른 기기에서도 같은 비밀번호로 들어가면 기록이 그대로예요. 비밀번호를 10번 틀리면 10분 동안 잠겨요.</li>
         <li><b>온라인 대결</b>에서 이기면 랭킹에 기록되고 티어 점수가 올라요. (30초보다 짧은 판은 기록되지 않아요)</li>
+        <li>대결이 <b>1분 30초</b>를 넘기면 <b>🔥 구구팡 타임!</b> 보내는 방해 슬라임이 1.5배가 되고 음악도 빨라져요. (온라인·컴퓨터 대결)</li>
+        <li><b>혼자 연습</b>에서는 💡 연쇄 가이드가 놓으면 연쇄가 터지는 자리를 알려 줘요.</li>
       </ol>
       <table class="keys">
         <tr><th>← →</th><td>옮기기</td></tr>
@@ -332,6 +340,16 @@
       <div class="emote-pop-title">친구에게 보내기</div>
       <div class="emote-grid" data-emote-grid></div>
       <button type="button" class="btn soft small emote-mute" data-emote-mute aria-pressed="true">🔔 친구 메시지 켜짐</button>
+    </div>
+    <!-- 구구팡 타임: 곧 시작 알림 + 시작 연출 -->
+    <div class="ggp-warn" id="ggp-warn" hidden><span class="ggp-warn-icon">⚠</span> 구구팡 타임까지 <b id="ggp-warn-n">5</b></div>
+    <div class="ggp-time" id="ggp-time" aria-live="assertive">
+      <div class="ggp-band">
+        <div class="ggp-stripes top"></div>
+        <div class="ggp-title" data-text="구구팡 타임!">구구팡 타임!</div>
+        <div class="ggp-desc">지금부터 방해 슬라임 <b>×1.5</b></div>
+        <div class="ggp-stripes bottom"></div>
+      </div>
     </div>
     <div class="overlay" id="overlay-countdown"><div class="countdown" id="countdown-text">3</div></div>
     <div class="overlay" id="overlay-pause">

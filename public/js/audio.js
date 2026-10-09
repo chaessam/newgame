@@ -57,7 +57,10 @@ class SoundEngine {
     this.step = 0;
     this.nextTime = 0;
     this.noise = null;
+    this.tempo = 1; // 구구팡 타임에는 빨라짐
   }
+
+  setTempo(x) { this.tempo = x > 0 ? x : 1; }
 
   // 브라우저는 사용자가 화면을 한 번 누른 뒤에만 소리를 낼 수 있어요.
   unlock() {
@@ -127,7 +130,7 @@ class SoundEngine {
 
   schedule() {
     const ctx = this.ctx, song = this.song;
-    const stepDur = 60 / song.bpm / 4;
+    const stepDur = 60 / (song.bpm * this.tempo) / 4;
     if (this.nextTime < ctx.currentTime - 0.2) this.nextTime = ctx.currentTime + 0.02; // 오래 멈췄다 돌아온 경우
     while (this.nextTime < ctx.currentTime + 0.12) {
       this.playStep(this.step, this.nextTime, stepDur);
@@ -253,6 +256,21 @@ class SoundEngine {
         this.noiseHit(t + 0.1, 0.4, 0.22, b, 'bandpass', 1500, 9000);
         break;
       }
+      case 'tick':
+        // 구구팡 타임 카운트다운: 숫자가 작아질수록 높게
+        this.tone('square', 880 + (6 - Math.min(arg || 5, 5)) * 110, t, 0.09, 0.22, b);
+        this.tone('square', 1760, t + 0.1, 0.05, 0.1, b);
+        break;
+      case 'ggp':
+        // 구구팡 타임 시작: 쿵 + 사이렌 두 번 + 팡파르
+        this.tone('sine', 140, t, 0.7, 0.75, b, 0.001, 38);
+        this.noiseHit(t, 0.5, 0.35, b, 'lowpass', 1800, 200);
+        for (let i = 0; i < 2; i++) {
+          this.tone('sawtooth', 520, t + 0.05 + i * 0.5, 0.25, 0.16, b, 0.01, 1150);
+          this.tone('sawtooth', 1150, t + 0.3 + i * 0.5, 0.25, 0.16, b, 0.01, 520);
+        }
+        this.notes('square', [72, 79, 84, 88, 91, 96], 0.07, 0.3, 0.2, 1.05);
+        break;
       case 'emote': this.notes('triangle', [86, 91], 0.07, 0.12, 0.22); break;
       case 'danger': this.tone('square', 990, t, 0.06, 0.12, b); break;
     }

@@ -204,3 +204,29 @@ test('연쇄 가이드: 2연쇄가 되는 자리를 찾음', async () => {
   // 연쇄가 안 되는 판에서는 null
   assert.equal(chainHint(emptyBoard(), pair), null);
 });
+
+test('구구팡 타임: 보내는 방해 슬라임 1.5배, 터진 자리는 연출로 기록', async () => {
+  const { PlayerGame } = await import('../public/js/player.js');
+  const { findGroups, makeCell } = await import('../public/js/core.js');
+  const sent = (rate) => {
+    const g = new PlayerGame({ seed: 1 });
+    g.garbageRate = rate;
+    for (const [x, y] of [[0, 12], [1, 12], [2, 12], [3, 12]]) g.board[y][x] = makeCell(0, 1);
+    let n = 0;
+    g.on('attack', (k) => { n += k; });
+    g.chain = 1; // 2연쇄째 (연쇄 보너스 8)
+    g.startPop(findGroups(g.board));
+    g.finishPop();
+    return { n, g };
+  };
+  const normal = sent(1), ggp = sent(1.5);
+  assert.equal(normal.n, 4); // 10 × 4개 × 8 = 320점 → 70점마다 1개
+  assert.equal(ggp.n, 6);    // 480점 → 6개
+  // 연출: 터진 4칸과 2연쇄가 기록되고, 연쇄 글자는 터진 자리 근처에
+  const e = normal.g.fxEvents[0];
+  assert.equal(e.chain, 2);
+  assert.equal(e.cells.length, 4);
+  const pop = normal.g.popups.find((p) => p.kind === 'chain');
+  assert.equal(pop.text, '2연쇄!');
+  assert.ok(Math.abs(pop.gx - 2) < 1e-9 && Math.abs(pop.gy - 12.5) < 1e-9, `${pop.gx},${pop.gy}`);
+});

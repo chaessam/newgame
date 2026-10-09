@@ -34,6 +34,20 @@ let screen = 'menu';
 const SEND_CHECK = 0.6;   // 판·점수·방해 슬라임이 바뀌었는지 확인하는 간격
 const SEND_PAIR_ONLY = 2.5; // 떨어지는 슬라임 위치만 바뀌었을 때는 이만큼 기다렸다가 보냄
 
+// 구구팡 타임: 대결이 시작되고 1분 30초가 지나면 보내는 방해 슬라임이 1.5배 (온라인·컴퓨터 대결)
+const GGP_RATE = 1.5;
+const GGP_WARN = 5; // 시작 몇 초 전부터 알려 줄지
+const GGP_AT = (() => {
+  // 내 컴퓨터에서 시험할 때만 주소 뒤 ?ggpAt=초 로 앞당길 수 있음 (실제 사이트에서는 무시)
+  try {
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      const v = Number(new URLSearchParams(location.search).get('ggpAt'));
+      if (v > 0) return v;
+    }
+  } catch (_) { /* 무시 */ }
+  return 90;
+})();
+
 // ---------------- 화면 전환 / 알림 ----------------
 
 function showScreen(name) {
@@ -285,7 +299,7 @@ class Panel {
     drawBoard(this.board, v, cs);
     // 2연쇄부터 판이 흔들리고 테두리가 번쩍임 (연쇄가 클수록 세게)
     for (const pop of v.popups || []) {
-      if (pop.kind !== 'chain' || pop.chain < 2 || this.seenPops.has(pop)) continue;
+      if (pop.kind !== 'chain' || pop.chain < 2 || pop.t < 0 || this.seenPops.has(pop)) continue;
       this.seenPops.add(pop);
       this.shake(pop.chain);
     }
@@ -449,6 +463,9 @@ class Match {
     this.lastSnap = '';
     this.lastPair = '';
     this.pairTimer = 0;
+    this.elapsed = 0;  // 시작 후 흐른 시간 (멈춤 동안은 안 셈)
+    this.ggp = 0;      // 구구팡 타임: 0 아직, 1 곧 시작(알림 중), 2 진행 중
+    this.ggpCount = 0;
     this.opps = [];
 
     const self = new PlayerGame({ seed: this.seed, name: myName || '나' });
@@ -499,7 +516,9 @@ class Match {
     this.buildPanels();
     const label = this.mode === 'cpu' ? `컴퓨터 ${LEVELS[this.level].name}과 대결`
       : this.mode === 'solo' ? '혼자 연습' : `온라인 대결 · ${this.opps.length + 1}명`;
+    this.label = label;
     $('mode-label').textContent = label;
+    ggpReset();
     $('btn-emote').hidden = this.mode !== 'online';
     $('btn-guide').hidden = this.mode !== 'solo';
     updateGuideButton();
@@ -572,7 +591,11 @@ class Match {
       return;
     }
     input.update(dt);
-    if (!this.over) this.self.update(dt);
+    if (!this.over) {
+      this.elapsed += dt;
+      if (this.mode !== 'solo') this.updateGgp();
+      this.self.update(dt);
+    }
     for (const o of this.opps) {
       if (o.game) {
         if (!this.over) { o.ctrl.update(dt); o.game.update(dt); }
@@ -652,10 +675,34 @@ class Match {
   }
 
   // win: true 승리, false 패배, null 연습 종료
+  // 구구팡 타임: 5초 전부터 알리고, 시간이 되면 시작
+  updateGgp() {
+    if (this.ggp >= 2) return;
+    const left = GGP_AT - this.elapsed;
+    if (left > GGP_WARN) return;
+    const n = Math.ceil(left);
+    if (n > 0 && n !== this.ggpCount) {
+      this.ggpCount = n;
+      this.ggp = 1;
+      ggpWarn(n);
+    }
+    if (left <= 0) this.startGgp();
+  }
+
+  startGgp() {
+    this.ggp = 2;
+    // 보내는 방해 슬라임 1.5배 (컴퓨터도 똑같이). 온라인은 친구들 기기에서도 같은 시각에 시작
+    this.self.garbageRate = GGP_RATE;
+    for (const o of this.opps) if (o.game) o.game.garbageRate = GGP_RATE;
+    $('mode-label').textContent = '🔥 구구팡 타임 · 방해 ×1.5';
+    ggpAnnounce();
+  }
+
   // tierRes: 온라인 대결이 기록됐을 때 서버가 알려 준 내 티어 변화
   finish(win, winnerName, recorded, tierRes) {
     if (this.over) return;
     this.over = true;
+    ggpReset();
     quiz.hide();
     audio.music(null);
     if (!this.endSoundPlayed) audio.sfx(win ? 'win' : 'lose');
@@ -758,7 +805,40 @@ function showTierResult(r) {
   }
 }
 
+// ---------------- 구구팡 타임 화면 ----------------
+
+let ggpTimer = null;
+function ggpWarn(n) {
+  const el = $('ggp-warn');
+  $('ggp-warn-n').textContent = n;
+  el.hidden = false;
+  el.classList.remove('tick');
+  void el.offsetWidth; // 숫자가 바뀔 때마다 쿵 하고 다시
+  el.classList.add('tick');
+  audio.sfx('tick', n);
+}
+function ggpAnnounce() {
+  $('ggp-warn').hidden = true;
+  const el = $('ggp-time');
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+  document.body.classList.add('ggp-on');
+  audio.sfx('ggp');
+  audio.setTempo(1.12); // 음악도 빨라짐
+  clearTimeout(ggpTimer);
+  ggpTimer = setTimeout(() => el.classList.remove('show'), 2700);
+}
+function ggpReset() {
+  clearTimeout(ggpTimer);
+  $('ggp-warn').hidden = true;
+  $('ggp-time').classList.remove('show');
+  document.body.classList.remove('ggp-on');
+  audio.setTempo(1);
+}
+
 function endMatch() {
+  ggpReset();
   // 그만하기·메뉴로·다시 하기로 나간 판도 셈 (이미 센 판은 다시 세지 않음)
   if (match) match.reportPlayed();
   match = null;
@@ -1408,7 +1488,7 @@ document.addEventListener('pointerdown', (e) => {
 
 // ---------------- 업데이트 안내 · 개인정보처리방침 ----------------
 // 새 안내가 생기면 NOTICE_VERSION을 바꾸면 기기마다 한 번 자동으로 떠요.
-const NOTICE_VERSION = '2026-10-tier-login';
+const NOTICE_VERSION = '2026-10-ggp-time';
 // 업데이트 안내는 어떻게 닫든(버튼·바깥·뒤로가기) 본 것으로 기억
 modalClosedHooks['overlay-notice'] = () => store.set('gugu-notice', NOTICE_VERSION);
 $('btn-notice').onclick = () => openModal('overlay-notice');

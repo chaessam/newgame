@@ -1363,3 +1363,183 @@ body.portrait .panel.self .panel-name.has-np .np { font-size: 17px; }
 #btn-guide { flex: 0 0 auto; }
 #btn-guide[hidden] { display: none; }
 #btn-guide.off { opacity: 0.55; border-style: dashed; }
+
+/* =====================================================================
+   구구팡 타임 (대결 1분 30초부터 방해 슬라임 1.5배)
+   ===================================================================== */
+/* 5초 전 알림 */
+.ggp-warn {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 22;
+  padding: 6px 18px;
+  border-radius: 999px;
+  font-size: 17px;
+  color: #fff;
+  white-space: nowrap;
+  background: rgba(20, 4, 34, 0.88);
+  border: 2px solid var(--pink);
+  box-shadow: 0 0 12px rgba(255, 79, 216, 0.85), inset 0 0 12px rgba(255, 79, 216, 0.35);
+  text-shadow: 0 0 6px #ff4fd8;
+  pointer-events: none;
+}
+.ggp-warn[hidden] { display: none; }
+.ggp-warn-icon { color: var(--yellow); text-shadow: 0 0 8px #ffb800; }
+.ggp-warn b {
+  display: inline-block;
+  min-width: 1em;
+  margin-left: 4px;
+  font-family: var(--digits);
+  font-weight: 900;
+  color: var(--yellow);
+  text-shadow: 0 0 6px #fff, 0 0 12px #ffb800;
+}
+.ggp-warn.tick { animation: ggp-tick 0.9s ease-out; }
+@keyframes ggp-tick {
+  0% { transform: translateX(-50%) scale(1.22); box-shadow: 0 0 28px #ff4fd8, 0 0 50px rgba(79, 240, 255, 0.6), inset 0 0 16px rgba(255, 79, 216, 0.6); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+
+/* 시작 연출: 화면 가로로 펼쳐지는 네온 경고 띠 */
+.ggp-time {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 21;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.ggp-time.show { display: flex; }
+.ggp-time.show::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: radial-gradient(ellipse at center, rgba(255, 79, 216, 0.55), rgba(122, 92, 255, 0.22) 45%, rgba(6, 2, 15, 0) 75%);
+  animation: ggp-bg 2.6s ease-out forwards;
+}
+.ggp-band {
+  position: relative;
+  width: 100%;
+  padding: 22px 12px 20px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(10, 2, 25, 0.86), rgba(34, 6, 56, 0.92) 50%, rgba(10, 2, 25, 0.86));
+  border-top: 2px solid #ff4fd8;
+  border-bottom: 2px solid #4ff0ff;
+  box-shadow: 0 0 22px rgba(255, 79, 216, 0.85), 0 0 46px rgba(79, 240, 255, 0.35);
+  overflow: hidden;
+}
+.ggp-time.show .ggp-band { animation: ggp-band 2.6s cubic-bezier(.2, .9, .2, 1) forwards; }
+.ggp-stripes {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 7px;
+  opacity: 0.9;
+  background: repeating-linear-gradient(-45deg, #ff4fd8 0 10px, rgba(255, 79, 216, 0) 10px 20px);
+  box-shadow: 0 0 10px rgba(255, 79, 216, 0.8);
+  animation: ggp-stripes 0.5s linear infinite;
+}
+.ggp-stripes.top { top: 5px; }
+.ggp-stripes.bottom {
+  bottom: 5px;
+  background: repeating-linear-gradient(45deg, #4ff0ff 0 10px, rgba(79, 240, 255, 0) 10px 20px);
+  box-shadow: 0 0 10px rgba(79, 240, 255, 0.8);
+  animation-direction: reverse;
+}
+@keyframes ggp-stripes { from { background-position: 0 0; } to { background-position: 28.3px 0; } }
+.ggp-title {
+  position: relative;
+  display: inline-block;
+  font-size: 92px;
+  font-size: clamp(42px, 13vw, 112px);
+  line-height: 1.1;
+  letter-spacing: 3px;
+  color: #fff;
+  text-shadow: 0 0 4px #fff, 0 0 10px #fff, 0 0 18px #ff4fd8, 0 0 36px #ff4fd8, 0 0 64px #ff4fd8, 0 0 100px #7a5cff;
+}
+.ggp-time.show .ggp-title { animation: ggp-flicker 2.6s linear forwards; }
+/* 켜질 때 지지직: 하늘·분홍 글자가 어긋났다 맞춰짐 */
+.ggp-title::before, .ggp-title::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  opacity: 0;
+  text-shadow: none;
+}
+.ggp-title::before { color: #4ff0ff; }
+.ggp-title::after { color: #ff4fd8; }
+.ggp-time.show .ggp-title::before { animation: ggp-glitch-a 0.6s steps(2) 0.1s; }
+.ggp-time.show .ggp-title::after { animation: ggp-glitch-b 0.6s steps(2) 0.1s; }
+.ggp-desc {
+  margin-top: 6px;
+  font-size: 22px;
+  font-size: clamp(16px, 4.4vw, 28px);
+  color: #fff;
+  text-shadow: 0 0 6px #4ff0ff, 0 0 14px #4ff0ff;
+}
+.ggp-desc b { font-family: var(--digits); font-weight: 900; color: var(--yellow); text-shadow: 0 0 6px #fff, 0 0 14px #ffb800; }
+@keyframes ggp-bg { 0% { opacity: 0; } 6% { opacity: 1; } 40% { opacity: 0.4; } 100% { opacity: 0; } }
+@keyframes ggp-band {
+  0% { transform: scaleY(0); opacity: 0; }
+  7% { transform: scaleY(1.18); opacity: 1; }
+  12% { transform: scaleY(1); }
+  86% { transform: scaleY(1); opacity: 1; }
+  100% { transform: scaleY(0); opacity: 0; }
+}
+@keyframes ggp-flicker {
+  0%, 5% { opacity: 0; }
+  6% { opacity: 1; }
+  8% { opacity: 0.2; }
+  10% { opacity: 1; }
+  12% { opacity: 0.35; }
+  15%, 100% { opacity: 1; }
+}
+@keyframes ggp-glitch-a {
+  0% { opacity: 0.8; transform: translate(-5px, 2px); clip-path: inset(10% 0 55% 0); }
+  50% { opacity: 0.8; transform: translate(4px, -2px); clip-path: inset(60% 0 8% 0); }
+  100% { opacity: 0; transform: none; }
+}
+@keyframes ggp-glitch-b {
+  0% { opacity: 0.8; transform: translate(5px, -2px); clip-path: inset(55% 0 12% 0); }
+  50% { opacity: 0.8; transform: translate(-4px, 2px); clip-path: inset(5% 0 62% 0); }
+  100% { opacity: 0; transform: none; }
+}
+
+/* 구구팡 타임 동안: 판 테두리가 분홍·금빛으로 맥박, 화면 가장자리가 붉게 숨 쉼 */
+body.ggp-on .board-frame {
+  background: linear-gradient(180deg, #ff4fd8, #ffe45c 50%, #ff4fd8);
+  animation: ggp-frame 0.9s ease-in-out infinite;
+}
+@keyframes ggp-frame {
+  0%, 100% { box-shadow: 0 0 14px rgba(255, 79, 216, 0.85); }
+  50% { box-shadow: 0 0 26px rgba(255, 79, 216, 1), 0 0 48px rgba(255, 228, 92, 0.5); }
+}
+body.ggp-on #screen-game::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 4;
+  pointer-events: none;
+  box-shadow: inset 0 0 70px rgba(255, 40, 140, 0.55);
+  animation: ggp-vignette 0.9s ease-in-out infinite;
+}
+@keyframes ggp-vignette { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ggp-stripes, body.ggp-on .board-frame, body.ggp-on #screen-game::after { animation: none; }
+  .ggp-time.show .ggp-title::before, .ggp-time.show .ggp-title::after { animation: none; }
+}
