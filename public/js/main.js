@@ -3,7 +3,7 @@ import { CpuController, LEVELS } from './ai.js';
 import { drawBoard, drawNextPair, drawPending, drawDemoSlime, COLORS } from './render.js';
 import { Net } from './net.js';
 import { audio } from './audio.js';
-import { normalizeNick, identityError, nickError, MIN_GAMES_FOR_WINRATE } from './identity.js';
+import { normalizeNick, identityError, MIN_GAMES_FOR_WINRATE } from './identity.js';
 import { hasProfanity } from './profanity.js';
 import { SCHOOLS_PATH, indexSchools, searchSchools, countSameName, shortSchool, placeOf, currentSido } from './schools.js';
 import { EMOTES, EMOTE_COOLDOWN_MS } from './emotes.js';
@@ -58,12 +58,22 @@ try { pickedSchool = JSON.parse(store.get('gugu-school-v2') || 'null'); } catch 
 // 통합 전 지역 이름(광주·전남)으로 저장해 둔 학교도 지금 이름으로 보여 줌 (학교 코드는 그대로)
 if (pickedSchool) pickedSchool.sido = currentSido(pickedSchool.sido);
 
+// 로그인 정보 { token, schoolCode, nick, school } — 같은 기기에서는 다음부터 자동으로 들어가짐
+let auth = null;
+try { auth = JSON.parse(store.get('gugu-auth') || 'null'); } catch (_) { auth = null; }
+if (auth && (!auth.token || !auth.school)) auth = null;
+if (auth) auth.school.sido = currentSido(auth.school.sido);
+
+// 지금 들어와 있는 학생 (로그인 전이면 빈 값)
 function identity() {
-  return {
-    schoolCode: pickedSchool ? pickedSchool.code : '',
-    school: pickedSchool,
-    nick: normalizeNick($('name-input').value),
-  };
+  if (!auth) return { schoolCode: '', school: null, nick: '' };
+  return { schoolCode: auth.schoolCode, school: auth.school, nick: auth.nick };
+}
+
+function authHeaders(extra) {
+  const h = Object.assign({}, extra || {});
+  if (auth) h.Authorization = `Bearer ${auth.token}`;
+  return h;
 }
 
 function saveIdentity() {
@@ -71,27 +81,97 @@ function saveIdentity() {
   store.set('gugu-name', $('name-input').value.trim());
 }
 
-// full: 온라인 대결처럼 지역·학교까지 필요한지
-function readIdentity(full) {
-  saveIdentity();
-  const id = identity();
-  if (full) {
-    const err = identityError(id);
-    if (err) {
-      toast(err);
-      $(err.startsWith('학교') ? 'school-input' : 'name-input').focus();
-      return null;
-    }
-  } else {
-    const err = nickError(id.nick);
-    if (err) {
-      toast(err);
-      $('name-input').focus();
-      return null;
-    }
+// 게임을 시작하기 전: 들어와 있는지 확인
+function readIdentity() {
+  if (!auth) {
+    toast('먼저 학교·닉네임·비밀번호를 적고 들어가기를 눌러 주세요.');
+    $(pickedSchool ? ($('name-input').value.trim() ? 'pin-input' : 'name-input') : 'school-input').focus();
+    return null;
   }
-  myName = id.nick;
-  return id;
+  myName = auth.nick;
+  return identity();
+}
+
+// ---------------- 들어가기 (로그인) ----------------
+
+function setAuth(a) {
+  auth = a;
+  store.set('gugu-auth', a ? JSON.stringify(a) : '');
+  if (a) myName = a.nick;
+  recordKey = '';
+  updateLoginView();
+  refreshMyRecord(true);
+}
+
+function updateLoginView() {
+  $('login-box').hidden = !!auth;
+}
+
+async function doLogin(create) {
+  saveIdentity();
+  const nick = normalizeNick($('name-input').value);
+  const id = { schoolCode: pickedSchool ? pickedSchool.code : '', nick };
+  const err = identityError(id);
+  if (err) {
+    toast(err);
+    $(err.startsWith('학교') ? 'school-input' : 'name-input').focus();
+    return;
+  }
+  const pin = $('pin-input').value.trim();
+  if (!/^[0-9]{4}$/.test(pin)) {
+    toast('비밀번호는 숫자 4자리로 적어 주세요.');
+    $('pin-input').focus();
+    return;
+  }
+  const btn = $('btn-login');
+  btn.disabled = true;
+  let r;
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schoolCode: id.schoolCode, nick, pin, create: !!create }),
+    });
+    r = await res.json();
+  } catch (_) {
+    r = { ok: false, error: '서버에 연결할 수 없어요.' };
+  }
+  btn.disabled = false;
+  if (!r.ok && r.code === 'no_account') {
+    const where = `${shortSchool(pickedSchool.name)} ${nick}`;
+    const msg = r.hasRecord
+      ? `"${where}" 기록이 있어요!\n이 비밀번호로 정하고 기록을 이어서 할까요?\n다음부터는 이 비밀번호로 들어와요. 꼭 기억해 주세요.`
+      : `처음 오셨네요!\n"${where}" 계정을 이 비밀번호로 만들까요?\n비밀번호는 꼭 기억해 주세요.`;
+    if (window.confirm(msg)) doLogin(true);
+    return;
+  }
+  if (!r.ok) {
+    toast(r.error || '들어가지 못했어요.');
+    if (r.code === 'wrong_pin') { $('pin-input').value = ''; $('pin-input').focus(); }
+    return;
+  }
+  $('pin-input').value = '';
+  setAuth({ token: r.token, schoolCode: r.school, nick: r.nick, school: pickedSchool });
+  toast(r.claimed ? `비밀번호를 정했어요. ${r.nick}의 기록이 그대로 이어져요!`
+    : r.created ? `${r.nick} 계정을 만들었어요. 반가워요!` : `${r.nick}, 어서 와요!`);
+}
+$('btn-login').onclick = () => doLogin(false);
+$('pin-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(false); });
+// 비밀번호 칸에는 숫자만
+$('pin-input').addEventListener('input', () => {
+  const v = $('pin-input').value.replace(/[^0-9]/g, '').slice(0, 4);
+  if (v !== $('pin-input').value) $('pin-input').value = v;
+});
+
+async function logout() {
+  const token = auth && auth.token;
+  setAuth(null);
+  if (token) {
+    try {
+      await fetch('/api/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    } catch (_) { /* 이 기기에서는 이미 나감 */ }
+  }
+  toast('나갔어요. 다른 친구도 들어갈 수 있어요.');
 }
 
 if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) document.body.classList.add('touch');
@@ -350,7 +430,7 @@ class Match {
     $('self-slot').innerHTML = '';
     // 상대 판만 지움 (세로 화면에서는 그만하기 버튼도 이 칸에 들어 있음)
     $('opp-area').querySelectorAll('.panel').forEach((el) => el.remove());
-    const mySchool = pickedSchool ? shortSchool(pickedSchool.name) : '';
+    const mySchool = auth ? shortSchool(auth.school.name) : '';
     // 내 티어 이름표: 온라인이면 서버가 알려 준 값, 아니면 내 기록에서
     const meInfo = (this.players || []).find((p) => p.id === myId);
     const myTier = meInfo ? meInfo.tier : (myBadge.found ? myBadge.tier : '');
@@ -913,12 +993,12 @@ schoolUi.showPicked();
 
 document.querySelectorAll('[data-cpu]').forEach((b) => {
   b.addEventListener('click', () => {
-    if (!readIdentity(false)) return;
+    if (!readIdentity()) return;
     enterFullscreen();
     startLocal('cpu', b.dataset.cpu);
   });
 });
-$('btn-solo').onclick = () => { if (readIdentity(false)) { enterFullscreen(); startLocal('solo'); } };
+$('btn-solo').onclick = () => { if (readIdentity()) { enterFullscreen(); startLocal('solo'); } };
 $('btn-howto').onclick = () => showScreen('howto');
 $('btn-ranking').onclick = () => { saveIdentity(); showScreen('ranking'); loadRanking(rankType); };
 document.querySelectorAll('[data-back]').forEach((b) => {
@@ -951,8 +1031,8 @@ let recordKey = '', recordAt = 0;
 async function refreshMyRecord(force = false) {
   const box = $('my-record');
   const id = identity();
-  if (identityError(id)) {
-    box.textContent = '학교를 고르고 닉네임을 적으면 온라인 대결 기록이 랭킹에 올라가요.';
+  if (!auth) {
+    box.innerHTML = '';
     recordKey = '';
     myMe = null;
     myBadge = { tier: 'bronze', title: '', found: false };
@@ -964,12 +1044,17 @@ async function refreshMyRecord(force = false) {
   recordKey = key;
   recordAt = Date.now();
   try {
-    const q = new URLSearchParams({ school: id.schoolCode, nick: id.nick });
-    const res = await fetch(`/api/me?${q}`);
+    const res = await fetch('/api/me', { headers: authHeaders() });
     if (!res.ok) throw new Error();
     const r = await res.json();
     const cur = identity();
     if (cur.schoolCode !== id.schoolCode || cur.nick !== id.nick) return;
+    if (!r.auth) {
+      // 로그인 표시가 지워졌거나 오래됨 → 다시 들어가기
+      setAuth(null);
+      toast('다시 들어가 주세요. (비밀번호로 들어가기)');
+      return;
+    }
     renderMyRecord(r, id);
   } catch (_) {
     box.textContent = '';
@@ -994,10 +1079,20 @@ function renderMyRecord(r, id) {
   const got = (r.titles || []).length;
   book.textContent = `🏅 칭호 ${got}개`;
   book.onclick = () => openTitleBook();
-  head.appendChild(book);
+  const out = document.createElement('button');
+  out.type = 'button';
+  out.className = 'btn soft small mt-out';
+  out.textContent = '나가기';
+  out.title = '다른 친구가 이 기기로 들어갈 때';
+  out.onclick = () => { if (window.confirm(`${id.nick}에서 나갈까요?\n다음에 들어올 때 비밀번호가 필요해요.`)) logout(); };
+  const btns = document.createElement('div');
+  btns.className = 'mt-btns';
+  btns.append(book, out);
+  head.appendChild(btns);
   card.appendChild(head);
 
   const t = tierInfo(myBadge.tier);
+  const isAdminCard = myBadge.tier === 'admin';
   const line = document.createElement('div');
   line.className = 'mt-line';
   const rp = r.rp || 0;
@@ -1009,7 +1104,10 @@ function renderMyRecord(r, id) {
   const fill = document.createElement('i');
   const note = document.createElement('small');
   note.className = 'mt-note';
-  if (nt) {
+  if (isAdminCard) {
+    fill.style.width = '100%';
+    note.textContent = '✨ 구구팡 슬라임 운영자 계정이에요';
+  } else if (nt) {
     fill.style.width = `${Math.round(nt.progress * 100)}%`;
     note.textContent = `${nt.next.name}까지 ${nt.need}점`;
   } else {
@@ -1044,9 +1142,11 @@ function openTitleBook() {
   const earned = r.titles || [];
   const list = $('title-list');
   list.innerHTML = '';
-  $('title-count').textContent = `${earned.length} / ${TITLES.filter((t) => !t.soon).length}`;
+  const normal = TITLES.filter((t) => !t.soon && !t.special);
+  $('title-count').textContent = `${earned.filter((id) => normal.some((t) => t.id === id)).length} / ${normal.length}`;
   for (const g of TITLE_GROUPS) {
-    const items = TITLES.filter((t) => t.group === g.id);
+    // 특별 칭호(운영자)는 가진 사람에게만 보임
+    const items = TITLES.filter((t) => t.group === g.id && (!t.special || earned.indexOf(t.id) >= 0));
     if (!items.length) continue;
     const h = document.createElement('h3');
     h.textContent = g.name;
@@ -1073,13 +1173,12 @@ function openTitleBook() {
 }
 
 async function chooseTitle(titleId) {
-  const id = identity();
-  if (identityError(id)) return;
+  if (!auth) return;
   try {
     const res = await fetch('/api/title', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ schoolCode: id.schoolCode, nick: id.nick, title: titleId }),
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ title: titleId }),
     });
     const r = await res.json();
     if (!r.ok) { toast(r.error || '칭호를 바꾸지 못했어요.'); return; }
@@ -1098,8 +1197,9 @@ $('overlay-titles').addEventListener('click', (e) => { if (e.target.id === 'over
 
 $('name-input').addEventListener('input', () => {
   clearTimeout(recordTimer);
-  recordTimer = setTimeout(() => { saveIdentity(); refreshMyRecord(); }, 500);
+  recordTimer = setTimeout(saveIdentity, 500);
 });
+updateLoginView();
 refreshMyRecord();
 
 // ---------------- 친구에게 상용구 보내기 (온라인 대결) ----------------
@@ -1215,6 +1315,26 @@ document.addEventListener('pointerdown', (e) => {
   showEmotePop(false);
 });
 
+// ---------------- 업데이트 안내 · 개인정보처리방침 ----------------
+// 새 안내가 생기면 NOTICE_VERSION을 바꾸면 기기마다 한 번 자동으로 떠요.
+const NOTICE_VERSION = '2026-10-tier-login';
+function showOverlay(id, show) { $(id).classList.toggle('show', show); }
+$('btn-notice').onclick = () => showOverlay('overlay-notice', true);
+$('btn-notice-close').onclick = () => {
+  showOverlay('overlay-notice', false);
+  store.set('gugu-notice', NOTICE_VERSION);
+};
+$('btn-privacy').onclick = () => showOverlay('overlay-privacy', true);
+$('btn-privacy-close').onclick = () => showOverlay('overlay-privacy', false);
+for (const id of ['overlay-notice', 'overlay-privacy']) {
+  $(id).addEventListener('click', (e) => {
+    if (e.target.id !== id) return;
+    if (id === 'overlay-notice') store.set('gugu-notice', NOTICE_VERSION);
+    showOverlay(id, false);
+  });
+}
+if (store.get('gugu-notice') !== NOTICE_VERSION) showOverlay('overlay-notice', true);
+
 // ---------------- QR 공유 ----------------
 
 const SHARE_URL = 'https://gugupang.chaessam.workers.dev/';
@@ -1261,9 +1381,8 @@ addEventListener('pagehide', () => { if (match) match.reportPlayed(); });
 // 컴퓨터 대결·혼자 연습 한 판을 누적 대결 수에 더함 (너무 짧은 판은 빼요)
 function reportPlayed(mode, seconds) {
   if (seconds < 20) return;
-  const id = identity();
   const body = { mode };
-  if (!identityError(id)) { body.schoolCode = id.schoolCode; body.nick = id.nick; }
+  if (auth) body.token = auth.token;
   statsLoadedAt = 0; // 메뉴로 돌아가면 바로 새 숫자를 보여 줌
   const json = JSON.stringify(body);
   // sendBeacon은 창을 닫는 중에도 브라우저가 끝까지 보내 줌
@@ -1410,14 +1529,14 @@ async function joinRoom(roomId) {
   lobbyNet.close();
   try {
     await roomNet.connect(`/ws/room/${roomId}`);
-    roomNet.send('join', { schoolCode: id.schoolCode, nick: id.nick });
+    roomNet.send('join', { token: auth ? auth.token : '' });
   } catch (_) {
     toast('방에 들어갈 수 없어요.');
     enterLobby();
   }
 }
 
-$('btn-online').onclick = () => { if (readIdentity(true)) { enterFullscreen(); enterLobby(); } };
+$('btn-online').onclick = () => { if (readIdentity()) { enterFullscreen(); enterLobby(); } };
 
 $('btn-create-room').onclick = () => {
   if (!lobbyNet.connected) return toast('서버에 연결되어 있지 않아요.');

@@ -5,6 +5,14 @@ import { titleInfo } from './titles.js';
 // 티어 문장 (방패 + 보석, 마스터부터는 왕관, 그랜드마스터·챌린저는 날개)
 export function tierEmblem(tierId) {
   const t = tierInfo(tierId);
+  if (t.id === 'admin') {
+    // 운영자: 빛줄기가 퍼지는 별
+    return '<svg class="np-emb" viewBox="-1 0 26 24" aria-hidden="true">'
+      + '<path class="e-ray" d="M12 .5v4M12 19.5v4M.5 12h4M19.5 12h4M3.9 3.9l2.8 2.8M17.3 17.3l2.8 2.8M3.9 20.1l2.8-2.8M17.3 6.7l2.8-2.8"/>'
+      + '<path class="e-star" d="M12 3.2l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.5l6-.8z"/>'
+      + '<circle class="e-core" cx="12" cy="12" r="2.6"/>'
+      + '</svg>';
+  }
   const crown = t.order >= 5
     ? '<path class="e-crown" d="M7.2 3.2 9.6 5.4 12 1.6 14.4 5.4 16.8 3.2 16 6.6H8z"/>'
     : '';
@@ -43,7 +51,7 @@ export function nameplate(name, tierId, opts) {
   const ti = opts.title ? titleInfo(opts.title) : null;
   if (ti) {
     const tt = document.createElement('span');
-    tt.className = 'np-title';
+    tt.className = `np-title${ti.special ? ' admin-title' : ''}`;
     tt.textContent = `${ti.icon} ${ti.name}`;
     wrap.appendChild(tt);
   }

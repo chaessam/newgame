@@ -69,3 +69,11 @@ test('대표 칭호: 고른 칭호가 있으면 그것, 없으면 가장 높은 
   assert.equal(displayTitle('none', ['hall']), '');
   assert.equal(displayTitle('', []), '');
 });
+
+test('운영자: 운영자 이름표와 칭호', async () => {
+  const { tierInfo } = await import('../public/js/tiers.js');
+  assert.equal(tierInfo('admin').name, '운영자');
+  const t = earnedTitles({ admin: true, wins: 0, games: 0, bestStreak: 0 });
+  assert.equal(t[0], 'operator');
+  assert.ok(!earnedTitles({ wins: 300, games: 400, bestStreak: 9, winsRank: 1 }).includes('operator'));
+});

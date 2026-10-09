@@ -3,6 +3,7 @@
 // rank: 순위 칭호(순위에서 밀리면 사라짐). soon: 다음 업데이트에서 열리는 칭호(지금은 목록에만 보임).
 
 export const TITLE_GROUPS = [
+  { id: 'special', name: '✨ 특별' },
   { id: 'rank', name: '🏅 순위' },
   { id: 'week', name: '📅 이번 주' },
   { id: 'win', name: '🏆 승리' },
@@ -16,6 +17,8 @@ export const TITLE_GROUPS = [
 
 // 위에 있을수록 높은 칭호 (대표 칭호를 고르지 않았을 때 이 순서로 정함)
 export const TITLES = [
+  // special: 특별한 계정만 (칭호 도감에서도 가진 사람에게만 보임)
+  { id: 'operator', group: 'special', icon: '🎮', name: '운영자', desc: '구구팡 슬라임 운영자', special: true },
   { id: 'legend', group: 'rank', icon: '🌟', name: '구구팡 레전드', desc: '누적 승리 전국 1위', rank: true },
   { id: 'hall', group: 'rank', icon: '🏛️', name: '명예의 전당', desc: '누적 승리 전국 TOP 10', rank: true },
   { id: 'champion', group: 'week', icon: '🏆', name: '이번 주 챔피언', desc: '지난주 승리 1위 (이번 주 동안)', rank: true },
@@ -56,10 +59,11 @@ const BY_ID = {};
 TITLES.forEach((t, i) => { BY_ID[t.id] = Object.assign({ order: i }, t); });
 export function titleInfo(id) { return BY_ID[id] || null; }
 
-// s: { wins, games, bestStreak, winsRank, rateRank, weekRank, champion, schoolAce, bestSchool }
+// s: { admin, wins, games, bestStreak, winsRank, rateRank, weekRank, champion, schoolAce, bestSchool }
 // 얻은 칭호 id 목록 (높은 칭호부터)
 export function earnedTitles(s) {
   const got = {
+    operator: !!s.admin,
     legend: s.winsRank === 1,
     hall: !!s.winsRank && s.winsRank <= 10,
     champion: !!s.champion,

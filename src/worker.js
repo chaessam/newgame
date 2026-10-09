@@ -22,6 +22,38 @@ const WEEK_MIN_GAMES = 5; // 이번 주 승률 랭킹에 오르는 최소 판 �
 const DAY_MS = 24 * 3600 * 1000;
 const playerKey = (school, nick) => `${school}\n${nick}`;
 
+// ---- 로그인 (학교 + 닉네임 + 숫자 4자리 비밀번호, 구구단 디펜스와 같은 방식) ----
+// 비밀번호는 그대로 저장하지 않고 PBKDF2로 해시해서 저장해요. 로그인 표시(토큰)도 해시로만 저장해요.
+const PBKDF2_ITER = 60000;
+const MAX_FAILS = 10;                  // 이만큼 틀리면
+const LOCK_MS = 10 * 60 * 1000;        // 10분 동안 잠금
+const SESSION_DAYS = 365;              // 같은 기기에서 자동으로 들어가지는 기간 (쓸 때마다 연장)
+const SESSIONS_PER_ACCOUNT = 10;       // 계정마다 기억하는 기기 수
+// 운영자 계정 (랭크와 상관없이 운영자 이름표·칭호): 전남광주 광산구 송우초등학교 채쌤
+const ADMINS = [['7402200', '채쌤']];
+const isAdmin = (school, nick) => ADMINS.some(([s, n]) => s === school && n === nick);
+
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+const randomHex = (n) => hex(crypto.getRandomValues(new Uint8Array(n)));
+async function sha256(text) { return hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))); }
+async function hashPin(pin, salt) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode(salt), iterations: PBKDF2_ITER }, key, 256,
+  );
+  return hex(bits);
+}
+function sameText(a, b) {
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+const bearer = (request) => {
+  const h = request.headers.get('Authorization') || '';
+  return h.startsWith('Bearer ') ? h.slice(7).trim() : '';
+};
+
 const clean = (s, max) => String(s ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, max);
 
 function json(data, status = 200) {
@@ -128,6 +160,20 @@ export class Lobby extends DurableObject {
     this.addColumn('players', 'best_streak', 'INTEGER NOT NULL DEFAULT 0');
     this.addColumn('players', 'title', "TEXT NOT NULL DEFAULT ''");
     this.addColumn('rooms', 'host_tier', "TEXT NOT NULL DEFAULT ''");
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        school TEXT NOT NULL, nick TEXT NOT NULL, pin_hash TEXT NOT NULL, salt TEXT NOT NULL,
+        fails INTEGER NOT NULL DEFAULT 0, locked_until INTEGER NOT NULL DEFAULT 0,
+        created INTEGER NOT NULL DEFAULT 0, last INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (school, nick)
+      );
+      CREATE TABLE IF NOT EXISTS sessions (
+        token_hash TEXT PRIMARY KEY, school TEXT NOT NULL, nick TEXT NOT NULL, created INTEGER, last INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS sessions_account ON sessions (school, nick, last DESC);
+      CREATE TABLE IF NOT EXISTS ip_limits (ip TEXT NOT NULL, kind TEXT NOT NULL, win INTEGER NOT NULL, count INTEGER NOT NULL,
+        PRIMARY KEY (ip, kind, win));
+    `);
     this.sql.exec('CREATE INDEX IF NOT EXISTS players_rp ON players (rp DESC, updated)');
     this.seedCounters();
     this.seedTiers();
@@ -150,10 +196,16 @@ export class Lobby extends DurableObject {
     const url = new URL(request.url);
     const q = url.searchParams;
     if (url.pathname === '/ws/lobby') return acceptSocket(this.ctx, request);
-    if (url.pathname === '/api/title' && request.method === 'POST') {
+    const token = bearer(request);
+    if (request.method === 'POST' && ['/api/login', '/api/logout', '/api/title'].includes(url.pathname)) {
       let body = {};
       try { body = await request.json(); } catch { /* 빈 요청 */ }
-      return json(await this.setTitle(body));
+      if (url.pathname === '/api/login') {
+        const r = await this.login(body, request.headers.get('CF-Connecting-IP') || 'local');
+        return json(r, r.ok ? 200 : r.status || 400);
+      }
+      if (url.pathname === '/api/logout') return json(await this.logout(token));
+      return json(await this.setTitle(token, body));
     }
     if (url.pathname === '/api/stats') return json(this.stats());
     if (url.pathname === '/api/played' && request.method === 'POST') {
@@ -162,7 +214,7 @@ export class Lobby extends DurableObject {
       return json(await this.played(body));
     }
     if (url.pathname === '/api/rank') return json(await this.ranking(q.get('type'), q.get('period')));
-    if (url.pathname === '/api/me') return json(await this.me(q.get('school'), q.get('nick')));
+    if (url.pathname === '/api/me') return json(await this.me(token));
     return json({ error: 'not found' }, 404);
   }
 
@@ -273,15 +325,113 @@ export class Lobby extends DurableObject {
   }
 
   // 컴퓨터 대결·혼자 연습 한 판이 끝날 때 (학교를 골랐으면 참여 학생으로도 셈)
-  async played({ mode, schoolCode, nick }) {
+  async played({ mode, token }) {
     if (mode !== 'cpu' && mode !== 'solo') return { ok: false };
     this.bump(mode);
-    if (schoolCode && nick) {
-      const id = await checkIdentity(this.env, schoolCode, nick);
-      if (!id.error) this.addParticipant(id.school.code, id.nick);
-    }
+    const who = await this.accountOf(token);
+    if (who) this.addParticipant(who.school, who.nick);
     this.statsCache = null;
     return { ok: true };
+  }
+
+  // ---- 로그인 ----
+
+  // IP마다 너무 많이 시도하면 잠깐 막음 (한 교실이 같은 IP를 쓰므로 넉넉하게)
+  // IP는 알아볼 수 없게 해시로 바꿔 저장하고, 지난 기간 기록은 바로 지움 (개인정보처리방침)
+  async limited(ip, kind, max, windowMs) {
+    const key = (await sha256(`gugupang-limit:${ip}`)).slice(0, 32);
+    const w = Math.floor(Date.now() / windowMs);
+    this.sql.exec('DELETE FROM ip_limits WHERE kind = ? AND win < ?', kind, w);
+    this.sql.exec(
+      'INSERT INTO ip_limits (ip, kind, win, count) VALUES (?, ?, ?, 1) ON CONFLICT (ip, kind, win) DO UPDATE SET count = count + 1',
+      key, kind, w,
+    );
+    const row = this.sql.exec('SELECT count FROM ip_limits WHERE ip = ? AND kind = ? AND win = ?', key, kind, w).one();
+    return row.count > max;
+  }
+
+  async newSession(school, nick) {
+    const token = randomHex(32);
+    const now = Date.now();
+    this.sql.exec(
+      'INSERT INTO sessions (token_hash, school, nick, created, last) VALUES (?, ?, ?, ?, ?)',
+      await sha256(token), school, nick, now, now,
+    );
+    // 계정마다 최근 기기 몇 개만 기억
+    this.sql.exec(
+      `DELETE FROM sessions WHERE school = ? AND nick = ? AND token_hash NOT IN
+        (SELECT token_hash FROM sessions WHERE school = ? AND nick = ? ORDER BY last DESC LIMIT ${SESSIONS_PER_ACCOUNT})`,
+      school, nick, school, nick,
+    );
+    return token;
+  }
+
+  // 로그인 표시 → { school, nick } (없거나 오래됐으면 null)
+  async accountOf(token) {
+    if (!token || !/^[0-9a-f]{64}$/.test(token)) return null;
+    const th = await sha256(token);
+    const s = this.sql.exec('SELECT school, nick, last FROM sessions WHERE token_hash = ?', th).toArray()[0];
+    if (!s || Date.now() - s.last > SESSION_DAYS * DAY_MS) return null;
+    // 하루에 한 번만 시각을 고쳐 써서 무료 한도(쓰기)를 아낌
+    if (Date.now() - s.last > DAY_MS) this.sql.exec('UPDATE sessions SET last = ? WHERE token_hash = ?', Date.now(), th);
+    return { school: s.school, nick: s.nick };
+  }
+
+  // body: { schoolCode, nick, pin, create }
+  // 계정이 없으면 { code: 'no_account', hasRecord } — 화면에서 확인을 받은 뒤 create: true로 다시 보냄
+  async login(body, ip) {
+    if (await this.limited(ip, 'login', 600, 3600 * 1000)) return { ok: false, status: 429, error: '잠시 후 다시 해 주세요.' };
+    const id = await checkIdentity(this.env, body.schoolCode, body.nick);
+    if (id.error) return { ok: false, error: id.error };
+    const pin = String(body.pin || '');
+    if (!/^\d{4}$/.test(pin)) return { ok: false, error: '비밀번호는 숫자 4자리로 적어 주세요.', code: 'bad_pin' };
+    const school = id.school.code, nick = id.nick;
+    const now = Date.now();
+    const a = this.sql.exec('SELECT * FROM accounts WHERE school = ? AND nick = ?', school, nick).toArray()[0];
+    if (!a) {
+      // 비밀번호가 없는 계정: 예전 기록이 있으면 처음 정한 비밀번호로 그 기록을 이어받음
+      const hasRecord = this.sql.exec(
+        'SELECT 1 FROM players WHERE school = ? AND nick = ?', school, nick,
+      ).toArray().length > 0;
+      if (!body.create) return { ok: false, code: 'no_account', hasRecord };
+      if (await this.limited(ip, 'register', 300, DAY_MS)) {
+        return { ok: false, status: 429, error: '오늘 이 곳에서 만든 계정이 너무 많아요. 내일 다시 해 주세요.' };
+      }
+      const salt = randomHex(16);
+      this.sql.exec(
+        'INSERT INTO accounts (school, nick, pin_hash, salt, created, last) VALUES (?, ?, ?, ?, ?, ?)',
+        school, nick, await hashPin(pin, salt), salt, now, now,
+      );
+      return { ok: true, token: await this.newSession(school, nick), school, nick, created: !hasRecord, claimed: hasRecord };
+    }
+    if (a.locked_until > now) {
+      const min = Math.ceil((a.locked_until - now) / 60000);
+      return { ok: false, status: 423, code: 'locked', error: `비밀번호를 ${MAX_FAILS}번 틀려서 잠겼어요. ${min}분 뒤에 다시 해 주세요.` };
+    }
+    if (!sameText(await hashPin(pin, a.salt), a.pin_hash)) {
+      const fails = a.fails + 1;
+      if (fails >= MAX_FAILS) {
+        this.sql.exec('UPDATE accounts SET fails = 0, locked_until = ? WHERE school = ? AND nick = ?', now + LOCK_MS, school, nick);
+        return { ok: false, status: 423, code: 'locked', error: `비밀번호를 ${MAX_FAILS}번 틀려서 10분 동안 잠겼어요.` };
+      }
+      this.sql.exec('UPDATE accounts SET fails = ? WHERE school = ? AND nick = ?', fails, school, nick);
+      return { ok: false, status: 401, code: 'wrong_pin', error: `비밀번호가 틀렸어요. (남은 기회 ${MAX_FAILS - fails}번)` };
+    }
+    this.sql.exec('UPDATE accounts SET fails = 0, locked_until = 0, last = ? WHERE school = ? AND nick = ?', now, school, nick);
+    return { ok: true, token: await this.newSession(school, nick), school, nick };
+  }
+
+  async logout(token) {
+    if (token && /^[0-9a-f]{64}$/.test(token)) this.sql.exec('DELETE FROM sessions WHERE token_hash = ?', await sha256(token));
+    return { ok: true };
+  }
+
+  // 대결방에 들어갈 때 (GameRoom이 호출): 로그인 확인 + 이름표
+  async joinInfo(token) {
+    const who = await this.accountOf(token);
+    if (!who) return null;
+    const p = this.profile(who.school, who.nick);
+    return { school: who.school, nick: who.nick, tier: p.tier, title: p.title };
   }
 
   // ---- 티어·칭호 ----
@@ -344,7 +494,9 @@ export class Lobby extends DurableObject {
     ).toArray()[0] || { wins: 0, games: 0, rp: 0, bestStreak: 0, title: '' };
     const key = playerKey(school, nick);
     const rpRank = this.rpRank(row.rp);
+    const admin = isAdmin(school, nick);
     const titles = earnedTitles({
+      admin,
       wins: row.wins,
       games: row.games,
       bestStreak: row.bestStreak,
@@ -360,24 +512,19 @@ export class Lobby extends DurableObject {
       games: row.games,
       rp: row.rp,
       rpRank,
-      tier: tierOf(row.rp, rpRank).id,
+      tier: admin ? 'admin' : tierOf(row.rp, rpRank).id, // 운영자는 랭크와 상관없이 운영자 이름표
       titles,
       title: displayTitle(row.title, titles),
       chosen: row.title,
     };
   }
 
-  // 대결방에서 이름표에 쓸 티어·대표 칭호 (GameRoom이 호출)
-  badge(school, nick) {
-    const p = this.profile(school, nick);
-    return { tier: p.tier, title: p.title };
-  }
-
   // 대표 칭호 고르기 ('none'이면 달지 않음)
-  async setTitle({ schoolCode, nick, title }) {
-    const id = await checkIdentity(this.env, schoolCode, nick);
-    if (id.error) return { ok: false, error: id.error };
-    const code = id.school.code;
+  async setTitle(token, { title }) {
+    const who = await this.accountOf(token);
+    if (!who) return { ok: false, error: '다시 들어가 주세요.', code: 'no_session' };
+    const code = who.school;
+    const id = { nick: who.nick };
     const p = this.profile(code, id.nick);
     const want = String(title || '');
     if (want !== 'none' && p.titles.indexOf(want) < 0) return { ok: false, error: '아직 얻지 못한 칭호예요.' };
@@ -507,12 +654,14 @@ export class Lobby extends DurableObject {
     return data;
   }
 
-  async me(schoolCode, nick) {
-    const id = await checkIdentity(this.env, schoolCode, nick);
-    if (id.error) return { found: false };
-    const code = id.school.code;
+  // 로그인한 학생의 기록 (로그인 표시가 맞지 않으면 auth: false)
+  async me(token) {
+    const who = await this.accountOf(token);
+    if (!who) return { auth: false };
+    const code = who.school;
+    const id = { nick: who.nick };
     const p = this.profile(code, id.nick);
-    if (!p.games) return { found: false, rp: 0, tier: 'bronze', titles: [], title: '' };
+    if (!p.games) return { auth: true, found: false, rp: 0, tier: p.tier, titles: p.titles, title: p.title, chosen: p.chosen };
     const winsRank = p.wins > 0
       ? this.sql.exec('SELECT COUNT(*) AS n FROM players WHERE wins > ?', p.wins).one().n + 1
       : null;
@@ -528,6 +677,7 @@ export class Lobby extends DurableObject {
       ? this.sql.exec('SELECT COUNT(*) AS n FROM weekly WHERE week = ? AND wins > ?', week, w.wins).one().n + 1
       : null;
     return {
+      auth: true,
       found: true,
       wins: p.wins,
       games: p.games,
@@ -673,12 +823,13 @@ export class GameRoom extends DurableObject {
     const m = this.meta;
     const cur = ws.deserializeAttachment();
     if (cur && cur.id) return;
-    const id = await checkIdentity(this.env, msg.schoolCode, msg.nick);
-    if (id.error) return this.fail(ws, id.error);
-    const school = id.school.code, schoolName = id.school.name, nick = id.nick;
-    // 이름표에 붙일 티어·대표 칭호
-    let badge = { tier: 'bronze', title: '' };
-    try { badge = await lobbyOf(this.env).badge(school, nick); } catch { /* 없어도 대결은 됨 */ }
+    // 로그인 표시로 누구인지 확인 (남의 닉네임으로 대결해서 기록을 바꿀 수 없게) + 이름표에 붙일 티어·대표 칭호
+    let info = null;
+    try { info = await lobbyOf(this.env).joinInfo(String(msg.token || '')); } catch { info = null; }
+    if (!info) return this.fail(ws, '다시 들어가 주세요. (처음 화면에서 비밀번호로 들어가기)');
+    const sc = (await loadSchools(this.env)).byCode.get(info.school);
+    const school = info.school, schoolName = sc ? sc.name : '', nick = info.nick;
+    const badge = { tier: info.tier, title: info.title };
     // (기다리는 동안 다른 친구가 들어왔을 수 있어 여기서 확인)
     if (m.status !== 'waiting') return this.fail(ws, '이미 게임 중인 방이에요.');
     const ps = this.players();
