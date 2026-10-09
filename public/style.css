@@ -1091,7 +1091,22 @@ body.portrait .dock-quit .btn { font-size: 14px; padding: 6px 14px; }
 body.portrait .panel.self .panel-name.has-np .np { font-size: 17px; }
 .panel.small .panel-name.has-np .np { font-size: 15px; }
 .panel.tiny .panel-name.has-np .np { font-size: 12px; }
-.panel-name.has-np .np-title { display: none; } /* 게임 중에는 티어만 (칭호는 대기실·랭킹·결과에서) */
+.panel-name.has-np .np-title { display: none; }
+/* 게임 판: 대표 칭호는 이름표 아래 줄에 작게 */
+.panel-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+.panel-title.admin-title { border-color: #ffe066; background: linear-gradient(90deg, rgba(255, 79, 216, 0.35), rgba(79, 240, 255, 0.3)); }
+.panel.small .panel-title, .panel.tiny .panel-title { display: none; }
 .player-list .p-name .np-wrap { margin-right: 4px; }
 .room-list .r-host .np { font-size: 13px; }
 .rank-list .who div { overflow: visible; }
@@ -1106,7 +1121,10 @@ body.portrait .panel.self .panel-name.has-np .np { font-size: 17px; }
   background: linear-gradient(135deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.15)), linear-gradient(135deg, var(--t-bg1), transparent 70%);
   box-shadow: 0 0 14px var(--t-glow);
 }
-.mt-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mt-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+/* 좁은 화면에서 이름표가 잘리지 않게: 자리가 모자라면 버튼이 아래 줄로 */
+.mt-head .mt-btns { margin-left: auto; }
+.mt-head > .np-wrap { flex: 1 1 0; min-width: 96px; } /* 칭호는 이름표 아래로 접히고, 그래도 좁으면 버튼이 내려감 */
 .mt-head .np { font-size: 19px; }
 .mt-book { flex: 0 0 auto; font-size: 13px; padding: 5px 10px; }
 .mt-line { margin-top: 6px; font-size: 15px; color: var(--ink); }
@@ -1116,6 +1134,7 @@ body.portrait .panel.self .panel-name.has-np .np { font-size: 17px; }
 .mt-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--t-mid, var(--cyan)), var(--t-hi, #fff)); box-shadow: 0 0 8px var(--t-glow, rgba(79, 240, 255, 0.6)); transition: width 0.9s cubic-bezier(.2, .8, .2, 1); }
 .mt-note { display: block; margin-top: 3px; font-size: 12px; color: var(--ink-soft); }
 .mt-stats { margin-top: 6px; font-size: 13px; color: var(--ink-soft); }
+.mt-stats .mt-item { white-space: nowrap; }
 
 /* ---------- 랭킹: 이번 주 / 전체 ---------- */
 .period-tabs { display: flex; justify-content: center; gap: 6px; margin-bottom: 8px; }

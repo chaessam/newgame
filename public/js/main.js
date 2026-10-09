@@ -179,7 +179,7 @@ if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) documen
 // ---------------- 플레이어 패널 ----------------
 
 class Panel {
-  constructor(view, { cs, self = false, subtitle = '', school = '', tier = '' }) {
+  constructor(view, { cs, self = false, subtitle = '', school = '', tier = '', title = '' }) {
     this.view = view;
     this.cs = cs;
     const el = document.createElement('div');
@@ -199,10 +199,18 @@ class Panel {
     el.querySelector('.panel-school').textContent = school;
     const nameEl = el.querySelector('.panel-name');
     if (tier) {
-      // 티어 이름표 (롤 랭크처럼). 판이 좁아서 칭호는 대기실·랭킹·결과 화면에서만
+      // 티어 이름표 (롤 랭크처럼)
       nameEl.classList.add('has-np');
       // 내 판은 테두리로 이미 구분되니 "(나)"는 빼고 이름을 더 보여 줌
       nameEl.appendChild(nameplate(view.name, tier, { small: cs < 36 }));
+      // 대표 칭호는 이름표가 잘리지 않게 아래 줄에 작게 (작은 판에서는 숨김)
+      const ti = title ? titleInfo(title) : null;
+      if (ti) {
+        const tt = document.createElement('div');
+        tt.className = `panel-title${ti.special ? ' admin-title' : ''}`;
+        tt.textContent = `${ti.icon} ${ti.name}`;
+        nameEl.after(tt);
+      }
     } else {
       nameEl.textContent = view.name;
     }
@@ -433,9 +441,10 @@ class Match {
     const mySchool = auth ? shortSchool(auth.school.name) : '';
     // 내 티어 이름표: 온라인이면 서버가 알려 준 값, 아니면 내 기록에서
     const meInfo = (this.players || []).find((p) => p.id === myId);
-    const myTier = meInfo ? meInfo.tier : (myBadge.found ? myBadge.tier : '');
+    const myTier = meInfo ? meInfo.tier : (auth ? myBadge.tier : '');
+    const myTitle = meInfo ? meInfo.title : (auth ? myBadge.title : '');
     this.selfPanel = new Panel(this.self, {
-      cs: 40, self: true, subtitle: '(나)', school: mySchool, tier: myTier,
+      cs: 40, self: true, subtitle: '(나)', school: mySchool, tier: myTier, title: myTitle,
     });
     $('self-slot').appendChild(this.selfPanel.el);
     const n = this.opps.length;
@@ -443,7 +452,7 @@ class Match {
     const ocs = portrait ? [15, 15, 13, 10][n] : [40, 40, 30, 24][n];
     const quit = $('game-tools');
     this.oppPanels = this.opps.map((o) => {
-      const p = new Panel(o.view, { cs: ocs, school: o.school, tier: o.tier || '' });
+      const p = new Panel(o.view, { cs: ocs, school: o.school, tier: o.tier || '', title: o.title || '' });
       $('opp-area').insertBefore(p.el, quit.parentElement === $('opp-area') ? quit : null);
       return p;
     });
@@ -1129,7 +1138,8 @@ function renderMyRecord(r, id) {
     if (r.week && r.week.games) parts.push(`이번 주 <b>${r.week.wins}</b>승`);
     if (r.winsRank) parts.push(`승리 랭킹 <b>${r.winsRank}</b>위`);
     if (r.schoolRank) parts.push(`우리 학교 <b>${r.schoolRank}</b>위`);
-    stats.innerHTML = parts.join(' · ');
+    // 항목 하나("우리 학교 5위")가 중간에서 끊겨 다음 줄로 넘어가지 않게, 항목 단위로만 줄바꿈
+    stats.innerHTML = parts.map((x) => `<span class="mt-item">${x}</span>`).join('<span class="mt-sep"> · </span>');
   }
   card.appendChild(stats);
   box.appendChild(card);
