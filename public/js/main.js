@@ -1129,7 +1129,8 @@ function renderMyRecord(r, id) {
     if (r.week && r.week.games) parts.push(`이번 주 <b>${r.week.wins}</b>승`);
     if (r.winsRank) parts.push(`승리 랭킹 <b>${r.winsRank}</b>위`);
     if (r.schoolRank) parts.push(`우리 학교 <b>${r.schoolRank}</b>위`);
-    stats.innerHTML = parts.join(' · ');
+    // 항목 하나("우리 학교 5위")가 중간에서 끊겨 다음 줄로 넘어가지 않게, 항목 단위로만 줄바꿈
+    stats.innerHTML = parts.map((x) => `<span class="mt-item">${x}</span>`).join('<span class="mt-sep"> · </span>');
   }
   card.appendChild(stats);
   box.appendChild(card);
