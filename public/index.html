@@ -36,13 +36,21 @@
         <div><b id="stat-games">0</b><span>누적 대결</span></div>
       </div>
 
-      <div class="id-fields">
-        <div class="school-pick" id="school-pick">
-          <input id="school-input" maxlength="30" placeholder="학교 검색 (예: 송우초)" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="school-results">
-          <button type="button" class="school-clear" id="school-clear" aria-label="학교 다시 고르기">✕</button>
-          <ul class="school-results" id="school-results" role="listbox"></ul>
+      <!-- 들어가기: 학교 + 닉네임 + 숫자 4자리 비밀번호 -->
+      <div class="login-box" id="login-box">
+        <div class="id-fields">
+          <div class="school-pick" id="school-pick">
+            <input id="school-input" maxlength="30" placeholder="학교 검색 (예: 송우초)" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="school-results">
+            <button type="button" class="school-clear" id="school-clear" aria-label="학교 다시 고르기">✕</button>
+            <ul class="school-results" id="school-results" role="listbox"></ul>
+          </div>
+          <input id="name-input" maxlength="10" placeholder="닉네임" autocomplete="off">
         </div>
-        <input id="name-input" maxlength="10" placeholder="닉네임" autocomplete="off">
+        <div class="pin-row">
+          <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="비밀번호 (숫자 4자리)" autocomplete="off">
+          <button class="btn primary" id="btn-login">들어가기</button>
+        </div>
+        <p class="login-help">처음이면 비밀번호를 정해서 바로 만들어져요. 예전에 하던 닉네임이면 비밀번호를 정하면 기록이 그대로 이어져요.</p>
       </div>
       <div class="my-record" id="my-record"></div>
 
@@ -106,7 +114,8 @@
         <li>틀리면 2초 동안 기다린 뒤 다시 풀 수 있어요. 두 번 틀리면 힌트가 나와요.</li>
         <li>연쇄를 많이 할수록 상대에게 <b>방해 슬라임</b>을 많이 보내요. 방해 슬라임은 옆에서 슬라임이 터질 때 같이 사라져요.</li>
         <li>왼쪽에서 세 번째 줄 맨 위까지 쌓이면 져요. 그 줄이 거의 다 차면 맨 위 칸이 <b>빨갛게 깜빡이며</b> 알려 줘요.</li>
-        <li><b>온라인 대결</b>에서 이기면 랭킹에 기록돼요. 학교와 닉네임이 같으면 같은 사람으로 기록되니, 매번 같은 학교를 고르고 같은 닉네임을 적어 주세요. (30초보다 짧은 판은 기록되지 않아요)</li>
+        <li>처음 화면에서 <b>학교 + 닉네임 + 숫자 4자리 비밀번호</b>로 들어가요. 다른 기기에서도 같은 비밀번호로 들어가면 기록이 그대로예요. 비밀번호를 10번 틀리면 10분 동안 잠겨요.</li>
+        <li><b>온라인 대결</b>에서 이기면 랭킹에 기록되고 티어 점수가 올라요. (30초보다 짧은 판은 기록되지 않아요)</li>
       </ol>
       <table class="keys">
         <tr><th>← →</th><td>옮기기</td></tr>

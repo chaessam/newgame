@@ -26,6 +26,8 @@ export const RANK_TIERS = [
 export const ALL_TIERS = TIERS.concat(RANK_TIERS);
 const BY_ID = {};
 ALL_TIERS.forEach((t, i) => { BY_ID[t.id] = Object.assign({ order: i }, t); });
+// 운영자 이름표 (랭크와 상관없이, 서버가 운영자 계정에만 붙임)
+BY_ID.admin = { id: 'admin', name: '운영자', min: 0, order: 100, special: true };
 
 export function tierInfo(id) {
   return BY_ID[id] || BY_ID.bronze;
