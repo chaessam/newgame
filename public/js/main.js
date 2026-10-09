@@ -1,5 +1,5 @@
 import { PlayerGame, RemoteView } from './player.js';
-import { CpuController, LEVELS } from './ai.js';
+import { CpuController, LEVELS, chainHint } from './ai.js';
 import { drawBoard, drawNextPair, drawPending, drawDemoSlime, COLORS } from './render.js';
 import { Net } from './net.js';
 import { audio } from './audio.js';
@@ -41,6 +41,37 @@ function showScreen(name) {
   if (name !== 'game') audio.music('menu');
   if (name === 'menu') loadStats();
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === `screen-${name}`));
+}
+
+// ---------------- 창(칭호 도감·안내·QR) 열고 닫기 ----------------
+// 휴대폰의 뒤로가기를 누르면 게임에서 나가지 않고 열린 창만 닫히도록 방문 기록에 한 칸 넣어 둠
+const modalStack = [];
+const modalClosedHooks = {};
+function openModal(id) {
+  if (modalStack.indexOf(id) >= 0) return;
+  $(id).classList.add('show');
+  modalStack.push(id);
+  try { history.pushState({ gugupangModal: id }, ''); } catch (_) { /* 기록을 못 쓰면 버튼으로만 닫힘 */ }
+}
+function hideModal(id) {
+  $(id).classList.remove('show');
+  const i = modalStack.indexOf(id);
+  if (i >= 0) modalStack.splice(i, 1);
+  if (modalClosedHooks[id]) modalClosedHooks[id]();
+}
+function closeModal(id) {
+  if (modalStack.indexOf(id) < 0) { $(id).classList.remove('show'); return; }
+  // 넣어 둔 기록을 되돌리면 아래 popstate에서 창이 닫힘
+  if (history.state && history.state.gugupangModal === id) history.back();
+  else hideModal(id);
+}
+addEventListener('popstate', () => {
+  const id = modalStack[modalStack.length - 1];
+  if (id) hideModal(id);
+});
+// 창 바깥(어두운 곳)을 누르면 닫기
+function closeOnBackdrop(id) {
+  $(id).addEventListener('click', (e) => { if (e.target.id === id) closeModal(id); });
 }
 
 let toastTimer = null;
@@ -178,6 +209,9 @@ if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) documen
 
 // ---------------- 플레이어 패널 ----------------
 
+// 연쇄 단계별 번쩍임 색 (render.js의 연쇄 글자 색과 같은 순서)
+const CHAIN_GLOW = ['#ffe14d', '#ffe14d', '#ffb02e', '#ff6a3d', '#ff4fd8', '#b06bff', '#4ff0ff'];
+
 class Panel {
   constructor(view, { cs, self = false, subtitle = '', school = '', tier = '', title = '' }) {
     this.view = view;
@@ -230,12 +264,31 @@ class Panel {
     this.lastScore = -1;
     this.lastPending = -1;
     this.lastNextKey = null; // null: 아직 한 번도 안 그림 (캔버스 크기를 꼭 맞추도록)
+    this.seenPops = new WeakSet();
+  }
+
+  shake(chain) {
+    const el = this.el;
+    const px = Math.min(2 + chain * 1.5, 11) * (this.cs < 36 ? 0.6 : 1);
+    el.style.setProperty('--sk', `${px}px`);
+    el.style.setProperty('--glow', CHAIN_GLOW[Math.min(chain, CHAIN_GLOW.length - 1)]);
+    el.classList.remove('chain-hit');
+    void el.offsetWidth; // 애니메이션을 처음부터 다시
+    el.classList.add('chain-hit');
+    clearTimeout(this.shakeTimer);
+    this.shakeTimer = setTimeout(() => el.classList.remove('chain-hit'), 600);
   }
 
   render() {
     const v = this.view;
     const cs = this.cs;
     drawBoard(this.board, v, cs);
+    // 2연쇄부터 판이 흔들리고 테두리가 번쩍임 (연쇄가 클수록 세게)
+    for (const pop of v.popups || []) {
+      if (pop.kind !== 'chain' || pop.chain < 2 || this.seenPops.has(pop)) continue;
+      this.seenPops.add(pop);
+      this.shake(pop.chain);
+    }
     const nk = v.nextPairs ? JSON.stringify(v.nextPairs) : '';
     if (nk !== this.lastNextKey) {
       const pairs = v.nextPairs || [];
@@ -364,6 +417,23 @@ $('btn-mute').onclick = () => {
 updateSoundButtons();
 audio.music('menu');
 
+// ---------------- 연쇄 가이드 (혼자 연습) ----------------
+let guideOn = store.get('gugu-guide') !== 'off';
+function updateGuideButton() {
+  const b = $('btn-guide');
+  b.textContent = guideOn ? '💡 가이드' : '💡 꺼짐';
+  b.classList.toggle('off', !guideOn);
+  b.setAttribute('aria-pressed', String(guideOn));
+}
+$('btn-guide').onclick = () => {
+  $('btn-guide').blur();
+  guideOn = !guideOn;
+  store.set('gugu-guide', guideOn ? 'on' : 'off');
+  updateGuideButton();
+  if (match && match.mode === 'solo') match.self.hint = guideOn ? chainHint(match.self.board, match.self.pair) : null;
+  toast(guideOn ? '연쇄 가이드를 켰어요. 💡 표시가 있는 곳에 놓아 보세요!' : '연쇄 가이드를 껐어요.');
+};
+
 // ---------------- 한 판 진행 ----------------
 
 class Match {
@@ -388,10 +458,19 @@ class Match {
     self.on('lock', () => audio.sfx('land'));
     self.on('correct', () => audio.sfx('correct'));
     self.on('wrong', () => audio.sfx('wrong'));
-    self.on('chain', (e) => audio.sfx('pop', e.chain));
+    self.on('chain', (e) => {
+      audio.sfx('pop', e.chain);
+      if (e.chain >= 3) audio.sfx('bigchain', e.chain);
+    });
     self.on('attack', () => audio.sfx('attack'));
     self.on('garbage', () => audio.sfx('garbage'));
     self.on('allclear', () => audio.sfx('allclear'));
+
+    // 연쇄 가이드 (혼자 연습): 새 슬라임이 나올 때마다 연쇄가 터지는 자리를 찾아 둠
+    if (mode === 'solo') {
+      self.on('spawn', () => { self.hint = guideOn ? chainHint(self.board, self.pair) : null; });
+      self.on('lock', () => { self.hint = null; });
+    }
 
     if (mode === 'cpu') {
       const lv = LEVELS[level];
@@ -422,6 +501,8 @@ class Match {
       : this.mode === 'solo' ? '혼자 연습' : `온라인 대결 · ${this.opps.length + 1}명`;
     $('mode-label').textContent = label;
     $('btn-emote').hidden = this.mode !== 'online';
+    $('btn-guide').hidden = this.mode !== 'solo';
+    updateGuideButton();
     showEmotePop(false);
     $('overlay-result').classList.remove('show');
     $('overlay-pause').classList.remove('show');
@@ -1179,7 +1260,7 @@ function openTitleBook() {
     list.appendChild(grid);
   }
   $('title-none').hidden = !earned.length;
-  $('overlay-titles').classList.add('show');
+  openModal('overlay-titles');
 }
 
 async function chooseTitle(titleId) {
@@ -1202,8 +1283,8 @@ async function chooseTitle(titleId) {
   openTitleBook();
 }
 $('title-none').onclick = () => chooseTitle('none');
-$('btn-titles-close').onclick = () => $('overlay-titles').classList.remove('show');
-$('overlay-titles').addEventListener('click', (e) => { if (e.target.id === 'overlay-titles') $('overlay-titles').classList.remove('show'); });
+$('btn-titles-close').onclick = () => closeModal('overlay-titles');
+closeOnBackdrop('overlay-titles');
 
 $('name-input').addEventListener('input', () => {
   clearTimeout(recordTimer);
@@ -1328,32 +1409,25 @@ document.addEventListener('pointerdown', (e) => {
 // ---------------- 업데이트 안내 · 개인정보처리방침 ----------------
 // 새 안내가 생기면 NOTICE_VERSION을 바꾸면 기기마다 한 번 자동으로 떠요.
 const NOTICE_VERSION = '2026-10-tier-login';
-function showOverlay(id, show) { $(id).classList.toggle('show', show); }
-$('btn-notice').onclick = () => showOverlay('overlay-notice', true);
-$('btn-notice-close').onclick = () => {
-  showOverlay('overlay-notice', false);
-  store.set('gugu-notice', NOTICE_VERSION);
-};
-$('btn-privacy').onclick = () => showOverlay('overlay-privacy', true);
-$('btn-privacy-close').onclick = () => showOverlay('overlay-privacy', false);
-for (const id of ['overlay-notice', 'overlay-privacy']) {
-  $(id).addEventListener('click', (e) => {
-    if (e.target.id !== id) return;
-    if (id === 'overlay-notice') store.set('gugu-notice', NOTICE_VERSION);
-    showOverlay(id, false);
-  });
-}
-if (store.get('gugu-notice') !== NOTICE_VERSION) showOverlay('overlay-notice', true);
+// 업데이트 안내는 어떻게 닫든(버튼·바깥·뒤로가기) 본 것으로 기억
+modalClosedHooks['overlay-notice'] = () => store.set('gugu-notice', NOTICE_VERSION);
+$('btn-notice').onclick = () => openModal('overlay-notice');
+$('btn-notice-close').onclick = () => closeModal('overlay-notice');
+$('btn-privacy').onclick = () => openModal('overlay-privacy');
+$('btn-privacy-close').onclick = () => closeModal('overlay-privacy');
+closeOnBackdrop('overlay-notice');
+closeOnBackdrop('overlay-privacy');
+if (store.get('gugu-notice') !== NOTICE_VERSION) openModal('overlay-notice');
 
 // ---------------- QR 공유 ----------------
 
 const SHARE_URL = 'https://gugupang.chaessam.workers.dev/';
-function showQr(show) { $('overlay-qr').classList.toggle('show', show); }
-$('btn-qr').onclick = () => showQr(true);
-$('btn-qr-close').onclick = () => showQr(false);
-$('overlay-qr').addEventListener('click', (e) => { if (e.target.id === 'overlay-qr') showQr(false); });
+$('btn-qr').onclick = () => openModal('overlay-qr');
+$('btn-qr-close').onclick = () => closeModal('overlay-qr');
+closeOnBackdrop('overlay-qr');
+// Esc: 맨 위에 열린 창 닫기
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && $('overlay-qr').classList.contains('show')) showQr(false);
+  if (e.key === 'Escape' && modalStack.length) closeModal(modalStack[modalStack.length - 1]);
 });
 $('btn-qr-copy').onclick = async () => {
   try {

@@ -244,14 +244,18 @@ export function drawBoard(canvas, view, cs) {
     ctx.restore();
   }
 
+  // 연쇄 가이드 (혼자 연습): 놓으면 연쇄가 터지는 자리에 반투명 슬라임
+  if (view.hint && p && view.state === 'fall') drawHint(ctx, view.hint, p, cs, rowY, t);
+
   drawDanger(ctx, view.board, cs, pad, t);
 
   // 연쇄 글자
   for (const pop of view.popups || []) {
+    if (pop.kind === 'chain') { drawChainPopup(ctx, pop, bw, bh, cs); continue; }
     const k = pop.t / pop.life;
     ctx.save();
     ctx.globalAlpha = Math.max(0, 1 - k * k);
-    ctx.font = `${Math.round(cs * (pop.kind === 'allclear' ? 0.8 : 1.05))}px ${FONT}`;
+    ctx.font = `${Math.round(cs * 0.8)}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';
@@ -259,7 +263,7 @@ export function drawBoard(canvas, view, cs) {
     ctx.strokeStyle = '#3a1d6e';
     const ty = bh * 0.42 - k * cs * 1.2;
     ctx.strokeText(pop.text, bw / 2, ty);
-    ctx.fillStyle = pop.kind === 'allclear' ? '#7ff3ff' : '#ffe14d';
+    ctx.fillStyle = '#7ff3ff';
     ctx.fillText(pop.text, bw / 2, ty);
     ctx.restore();
   }
@@ -272,6 +276,102 @@ export function drawBoard(canvas, view, cs) {
     ctx.fillStyle = '#fff';
     ctx.fillText('끝!', bw / 2, bh / 2);
   }
+}
+
+// 연쇄 단계별 글자 색 (1: 노랑 → 2: 주황 → 3: 빨강 → 4: 분홍 → 5: 보라 → 6~: 하늘)
+const CHAIN_COLORS = ['#ffe14d', '#ffe14d', '#ffb02e', '#ff6a3d', '#ff4fd8', '#b06bff', '#4ff0ff'];
+
+function drawChainPopup(ctx, pop, bw, bh, cs) {
+  const n = pop.chain || 1;
+  const k = pop.t / pop.life;
+  // 튀어나왔다가(살짝 커졌다 돌아옴) 위로 떠오르며 사라짐
+  const inK = Math.min(1, pop.t / 0.18);
+  const back = 1 + 2.2 * Math.pow(inK - 1, 3) + 1.2 * Math.pow(inK - 1, 2);
+  const scale = (0.4 + 0.6 * back) * (1 + Math.min(n - 1, 5) * 0.12);
+  const alpha = k < 0.7 ? 1 : Math.max(0, 1 - (k - 0.7) / 0.3);
+  const cx = bw / 2;
+  const cy = bh * 0.42 - k * cs * (n >= 2 ? 0.6 : 1.2);
+  const color = CHAIN_COLORS[Math.min(n, CHAIN_COLORS.length - 1)];
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // 3연쇄부터: 뒤에서 빛줄기가 돌며 퍼짐
+  if (n >= 3) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(pop.t * 1.6);
+    const rays = 10 + Math.min(n, 8) * 2;
+    const r = cs * (1.6 + Math.min(n, 7) * 0.35) * Math.min(1, pop.t / 0.25);
+    ctx.globalAlpha = alpha * 0.35;
+    ctx.fillStyle = color;
+    for (let i = 0; i < rays; i++) {
+      const a = (i / rays) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(a - 0.08) * r, Math.sin(a - 0.08) * r);
+      ctx.lineTo(Math.cos(a + 0.08) * r, Math.sin(a + 0.08) * r);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.translate(cx, cy);
+  ctx.scale(scale, scale);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.font = `${Math.round(cs * 1.05)}px ${FONT}`;
+  if (n >= 2) { ctx.shadowColor = color; ctx.shadowBlur = cs * 0.6; }
+  ctx.lineWidth = cs * 0.2;
+  ctx.strokeStyle = '#2a1060';
+  ctx.strokeText(pop.text, 0, 0);
+  ctx.fillStyle = n >= 6 ? `hsl(${(pop.t * 360) % 360}, 100%, 70%)` : color;
+  ctx.fillText(pop.text, 0, 0);
+  if (pop.sub) {
+    ctx.shadowBlur = 0;
+    ctx.font = `${Math.round(cs * 0.48)}px ${FONT}`;
+    ctx.lineWidth = cs * 0.12;
+    ctx.strokeText(pop.sub, 0, cs * 0.85);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(pop.sub, 0, cs * 0.85);
+  }
+  ctx.restore();
+}
+
+// 연쇄 가이드: 놓을 자리에 반투명 슬라임 + 깜빡이는 테두리 + "N연쇄!" 표시
+function drawHint(ctx, hint, pair, cs, rowY, t) {
+  const pulse = 0.5 + 0.5 * Math.sin(t * 6);
+  let top = Infinity, topX = 0;
+  for (const cell of hint.cells) {
+    const piece = cell.piece === 'a' ? pair.a : pair.b;
+    const px = cell.x * cs, py = rowY(cell.y);
+    ctx.save();
+    ctx.globalAlpha = 0.45 + 0.2 * pulse;
+    drawSlime(ctx, px, py, cs, { c: piece.c, n: piece.n });
+    ctx.restore();
+    ctx.save();
+    ctx.setLineDash([cs * 0.16, cs * 0.1]);
+    ctx.lineDashOffset = -t * cs * 0.6;
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.55 + 0.45 * pulse})`;
+    ctx.lineWidth = cs * 0.07;
+    roundRect(ctx, px + cs * 0.06, py + cs * 0.06, cs * 0.88, cs * 0.88, cs * 0.3);
+    ctx.stroke();
+    ctx.restore();
+    if (py < top) { top = py; topX = px; }
+  }
+  const label = `💡 ${hint.chain}연쇄!`;
+  ctx.save();
+  ctx.font = `${Math.round(cs * 0.42)}px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  const lx = Math.min(Math.max(topX + cs / 2, cs * 1.1), W * cs - cs * 1.1);
+  const ly = Math.max(cs * 0.55, top - cs * 0.08);
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = cs * 0.12;
+  ctx.strokeStyle = '#2a1060';
+  ctx.strokeText(label, lx, ly);
+  ctx.fillStyle = '#ffe14d';
+  ctx.fillText(label, lx, ly);
+  ctx.restore();
 }
 
 // 다음 슬라임 한 쌍을 세로로 (위: 자식, 아래: 축)

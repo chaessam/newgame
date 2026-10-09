@@ -244,6 +244,15 @@ class SoundEngine {
       case 'go': this.notes('square', [84, 91], 0.07, 0.3, 0.28); break;
       case 'win': this.notes('square', [72, 76, 79, 84, 79, 84, 88], 0.11, 0.25, 0.28); break;
       case 'lose': this.notes('triangle', [76, 72, 67, 60], 0.18, 0.35, 0.4); break;
+      case 'bigchain': {
+        // 3연쇄부터: 위로 솟는 팡파르 (연쇄가 클수록 높고 길게)
+        const n = Math.min(arg || 3, 8);
+        const base = 76 + (n - 3) * 2;
+        const steps = [0, 4, 7, 12, 16, 19, 24].slice(0, 3 + Math.min(n - 3, 4));
+        this.notes('square', steps.map((d) => base + d), 0.05, 0.16, 0.22, 0.12);
+        this.noiseHit(t + 0.1, 0.4, 0.22, b, 'bandpass', 1500, 9000);
+        break;
+      }
       case 'emote': this.notes('triangle', [86, 91], 0.07, 0.12, 0.22); break;
       case 'danger': this.tone('square', 990, t, 0.06, 0.12, b); break;
     }

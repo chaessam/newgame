@@ -12,6 +12,19 @@ const LOCK_DELAY = 0.5;    // 바닥에 닿은 뒤 고정까지 시간
 const POP_TIME = 0.5;      // 터지는 연출 시간
 const WRONG_LOCKOUT = 2.0; // 오답 후 다시 입력할 수 있을 때까지 시간
 
+// 연쇄 글자: 1번째는 "펑!", 2연쇄부터 크게, 4연쇄부터는 칭찬 한마디
+const CHAIN_CHEERS = ['', '', '', '', '대단해!', '굉장해!', '전설이야!!'];
+export function chainPopup(chain) {
+  return {
+    text: chain === 1 ? '펑!' : `${chain}연쇄!`,
+    sub: CHAIN_CHEERS[Math.min(chain, CHAIN_CHEERS.length - 1)],
+    kind: 'chain',
+    chain,
+    t: 0,
+    life: chain >= 2 ? 1.5 + Math.min(chain, 6) * 0.1 : 1.0,
+  };
+}
+
 export class PlayerGame {
   constructor({ seed = 1, colors = 4, name = '', askQuestions = true } = {}) {
     this.name = name;
@@ -254,7 +267,7 @@ export class PlayerGame {
     clearGroups(this.board, groups);
     this.popGroups = null;
     this.stats.maxChain = Math.max(this.stats.maxChain, this.chain);
-    this.addPopup(`${this.chain}연쇄!`, 'chain');
+    this.popups.push(chainPopup(this.chain));
     this.emit('chain', { chain: this.chain, score: step });
 
     let { count, leftover } = garbageFromScore(step, this.leftover);
@@ -384,7 +397,7 @@ export class RemoteView {
         [{ c: n[4], n: n[5] }, { c: n[6], n: n[7] }],
       ];
     }
-    if (s.ch > this.chain && s.ch > 0) this.popups.push({ text: `${s.ch}연쇄!`, kind: 'chain', t: 0, life: 1.4 });
+    if (s.ch > this.chain && s.ch > 0) this.popups.push(chainPopup(s.ch));
     this.chain = s.ch | 0;
     this.score = s.s | 0;
     this.pendingIn = s.pi | 0;
