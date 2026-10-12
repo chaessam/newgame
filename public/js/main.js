@@ -1339,7 +1339,7 @@ function renderMyRecord(r, id) {
     fill.style.width = '100%';
     note.textContent = r.rpRank
       ? `마스터 중 전국 ${r.rpRank}위 · TOP ${GRANDMASTER_TOP} 그랜드마스터, TOP ${CHALLENGER_TOP} 챌린저`
-      : `${MASTER_RP}점 이상`;
+      : `마스터 중 전국 TOP 100 밖 · TOP ${GRANDMASTER_TOP} 그랜드마스터, TOP ${CHALLENGER_TOP} 챌린저`;
   }
   bar.appendChild(fill);
   card.append(bar, note);
