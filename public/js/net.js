@@ -1,4 +1,6 @@
 // 온라인 서버 연결 (로비용 하나, 대결방용 하나를 따로 씁니다)
+export const SERVER_BUSY_CLOSE = 4503; // src/worker.js 와 같은 값
+
 export class Net {
   constructor() {
     this.ws = null;
@@ -30,11 +32,17 @@ export class Net {
         resolve();
       };
       ws.onerror = () => { if (!opened) reject(new Error('connect')); };
-      ws.onclose = () => {
+      ws.onclose = (e) => {
         if (this.ws !== ws) return;
         clearInterval(this.pingTimer);
         this.connected = false;
         this.ws = null;
+        // 서버가 "지금은 쓸 수 없어요"(4503)라고 닫음: 이유는 'quota'(하루 사용량 다 참) 또는 'down'
+        if (e && e.code === SERVER_BUSY_CLOSE) {
+          if (!opened) reject(new Error('busy'));
+          this.dispatch({ type: 'busy', reason: e.reason || 'down' });
+          return;
+        }
         if (opened) this.dispatch({ type: 'disconnected' });
       };
       ws.onmessage = (e) => {

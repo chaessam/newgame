@@ -112,12 +112,38 @@ async function checkIdentity(env, schoolCode, nick) {
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
-    if (pathname === '/ws/lobby' || pathname.startsWith('/api/')) return lobbyOf(env).fetch(request);
-    const m = pathname.match(/^\/ws\/room\/([a-z0-9]{8})$/);
-    if (m) return env.ROOM.get(env.ROOM.idFromName(m[1])).fetch(request);
+    try {
+      if (pathname === '/ws/lobby' || pathname.startsWith('/api/')) return await lobbyOf(env).fetch(request);
+      const m = pathname.match(/^\/ws\/room\/([a-z0-9]{8})$/);
+      if (m) return await env.ROOM.get(env.ROOM.idFromName(m[1])).fetch(request);
+    } catch (e) {
+      return serverDown(request, e);
+    }
     return env.ASSETS.fetch(request);
   },
 };
+
+// 온라인 서버(Durable Object)를 쓸 수 없을 때 화면이 알아볼 수 있게 알려 줌
+// 'quota': 무료 플랜 하루 사용량이 다 참 (한국 시간 오전 9시에 다시 열림), 'down': 그 밖의 서버 문제
+const SERVER_BUSY_CLOSE = 4503;
+function serverDownReason(err) {
+  return /exceeded|free tier|limit/i.test(String((err && err.message) || err)) ? 'quota' : 'down';
+}
+function serverDown(request, err) {
+  const reason = serverDownReason(err);
+  console.log('server down', reason, String((err && err.message) || err));
+  if (request.headers.get('Upgrade') === 'websocket') {
+    // 웹소켓은 상태 코드를 화면에서 볼 수 없어서, 연결을 받자마자 이유를 담아 닫음
+    const pair = new WebSocketPair();
+    pair[1].accept();
+    pair[1].close(SERVER_BUSY_CLOSE, reason);
+    return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+  return new Response(JSON.stringify({ ok: false, code: `server_${reason}`, error: '온라인 서버를 지금 쓸 수 없어요.' }), {
+    status: 503,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '600' },
+  });
+}
 
 // ---------------------------------------------------------------- 로비 + 랭킹
 

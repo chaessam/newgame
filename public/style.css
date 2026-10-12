@@ -783,6 +783,47 @@ body.portrait .q-left { overflow: hidden; max-height: 100%; }
 .play-stats div:nth-child(3) b { text-shadow: 0 0 8px var(--yellow); }
 .play-stats span { font-size: 13px; color: var(--ink-soft); white-space: nowrap; }
 
+/* ---------- 온라인 서버를 쓸 수 없을 때 ---------- */
+.busy-bar {
+  display: block;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(255, 228, 92, 0.6);
+  background: rgba(255, 228, 92, 0.08);
+  box-shadow: 0 0 12px rgba(255, 228, 92, 0.25), inset 0 0 12px rgba(255, 228, 92, 0.08);
+  color: #fff6c2;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.45;
+  text-align: center;
+  word-break: keep-all;
+  cursor: pointer;
+}
+.busy-bar[hidden] { display: none; }
+.busy-bar b { color: var(--yellow); font-weight: normal; text-shadow: 0 0 8px rgba(255, 228, 92, 0.7); }
+.busy-modal { text-align: center; word-break: keep-all; }
+.busy-icon {
+  font-size: 46px;
+  line-height: 1;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 0 10px rgba(255, 228, 92, 0.7));
+  animation: busy-flicker 2.4s infinite;
+}
+@keyframes busy-flicker {
+  0%, 100% { opacity: 1; }
+  46% { opacity: 1; }
+  48% { opacity: 0.35; }
+  50% { opacity: 1; }
+  53% { opacity: 0.5; }
+  55% { opacity: 1; }
+}
+.busy-modal #busy-text { white-space: pre-line; }
+.busy-modal #busy-text b { color: var(--yellow); font-weight: normal; }
+.busy-ok { color: var(--cyan-soft); text-shadow: 0 0 8px rgba(79, 240, 255, 0.5); }
+.busy-guest { font-size: 14px; color: var(--ink-soft); }
+
 /* ---------- 만든 사람 표시 (메뉴 아래) ---------- */
 .maker {
   margin-top: 16px;
