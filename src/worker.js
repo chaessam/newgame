@@ -13,14 +13,17 @@ import { SCHOOLS_PATH, indexSchools, shortSchool, placeOf } from '../public/js/s
 import { MASTER_RP, RP_SEED_PER_WIN, tierOf, applyResult, weekKey } from '../public/js/tiers.js';
 import { earnedTitles, displayTitle } from '../public/js/titles.js';
 
-const HEARTBEAT_MS = 5 * 60 * 1000;  // 방이 살아 있다고 로비에 알리는 주기 (무료 한도를 아끼려고 5분)
+const DAY_MS = 24 * 3600 * 1000;
+// 방이 살아 있다고 로비에 알리는 주기. 알릴 때마다 데이터베이스에 써서(무료 한도: 하루 쓰기 10만 줄) 30분.
+// 방은 마지막 친구가 나갈 때 스스로 지워지므로, 이 알림은 그러지 못한 방(서버 재시작 등)을 치우는 안전장치예요.
+const HEARTBEAT_MS = 30 * 60 * 1000;
 const STALE_MS = 3 * HEARTBEAT_MS;   // 이 시간 동안 소식이 없는 방은 목록에서 지움
+const SESSION_TOUCH_MS = 30 * DAY_MS; // 자동 로그인 마지막 사용 시각은 30일에 한 번만 고쳐 씀
 const RANK_CACHE_MS = 60 * 1000;
 const MAX_STATE_BYTES = 4000;
 const WEEK_MIN_GAMES = 5; // 이번 주 승률 랭킹에 오르는 최소 판 수
 const MASTER_RANK_TOP = 100; // 마스터 중 이 순위까지만 정확히 셈 (그 밖은 "TOP 100 밖")
 
-const DAY_MS = 24 * 3600 * 1000;
 const playerKey = (school, nick) => `${school}\n${nick}`;
 
 // ---- 로그인 (학교 + 닉네임 + 숫자 4자리 비밀번호, 구구단 디펜스와 같은 방식) ----
@@ -198,17 +201,15 @@ export class Lobby extends DurableObject {
         token_hash TEXT PRIMARY KEY, school TEXT NOT NULL, nick TEXT NOT NULL, created INTEGER, last INTEGER
       );
       CREATE INDEX IF NOT EXISTS sessions_account ON sessions (school, nick, last DESC);
-      CREATE TABLE IF NOT EXISTS ip_limits (ip TEXT NOT NULL, kind TEXT NOT NULL, win INTEGER NOT NULL, count INTEGER NOT NULL,
-        PRIMARY KEY (ip, kind, win));
+      -- IP 시도 횟수는 이제 서버 메모리에서만 셈: 예전에 저장하던 표는 지움
+      DROP TABLE IF EXISTS ip_limits;
     `);
     this.sql.exec('CREATE INDEX IF NOT EXISTS players_rp ON players (rp DESC, updated)');
     // 무료 한도(하루 읽는 줄 수)를 아끼는 색인·표
     // - 학교마다 승리 1위(우리 학교 에이스)를 한 줄만 읽고 찾음
-    // - IP 시도 횟수에서 지난 기간 기록을 지울 때 표 전체를 훑지 않음
     // - 승리 수마다 학생 수: 내 승리 순위를 학생 수만큼 세지 않고 이 표의 몇 줄로 셈
     this.sql.exec(`
       CREATE INDEX IF NOT EXISTS players_school_wins ON players (school, wins DESC, games);
-      CREATE INDEX IF NOT EXISTS ip_limits_win ON ip_limits (kind, win);
       CREATE TABLE IF NOT EXISTS wins_hist (wins INTEGER PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0);
       CREATE INDEX IF NOT EXISTS weekly_rate ON weekly (week, (CAST(wins AS REAL) / games) DESC, wins DESC)
         WHERE games >= ${WEEK_MIN_GAMES};
@@ -398,9 +399,15 @@ export class Lobby extends DurableObject {
   }
 
   // 컴퓨터 대결·혼자 연습 한 판이 끝날 때 (학교를 골랐으면 참여 학생으로도 셈)
-  async played({ mode, token }) {
-    if (mode !== 'cpu' && mode !== 'solo') return { ok: false };
-    this.bump(mode);
+  // 예전 화면은 { mode } 로 한 판씩, 지금 화면은 { solo, cpu } 로 모아서 보냄 (한 번에 50판까지만 셈)
+  async played({ mode, solo, cpu, token }) {
+    const add = { solo: 0, cpu: 0 };
+    if (mode === 'cpu' || mode === 'solo') add[mode] = 1;
+    add.solo += Math.min(50, Math.max(0, Math.floor(Number(solo) || 0)));
+    add.cpu += Math.min(50, Math.max(0, Math.floor(Number(cpu) || 0)));
+    if (!add.solo && !add.cpu) return { ok: false };
+    if (add.solo) this.bump('solo', add.solo);
+    if (add.cpu) this.bump('cpu', add.cpu);
     const who = await this.accountOf(token);
     if (who) this.addParticipant(who.school, who.nick);
     this.statsCache = null;
@@ -410,17 +417,19 @@ export class Lobby extends DurableObject {
   // ---- 로그인 ----
 
   // IP마다 너무 많이 시도하면 잠깐 막음 (한 교실이 같은 IP를 쓰므로 넉넉하게)
-  // IP는 알아볼 수 없게 해시로 바꿔 저장하고, 지난 기간 기록은 바로 지움 (개인정보처리방침)
+  // IP는 알아볼 수 없게 해시로 바꿔 세고, 지난 기간 기록은 바로 지움 (개인정보처리방침)
+  // 데이터베이스에 쓰지 않고 서버 메모리에서만 셈 (무료 한도: 하루 쓰기 10만 줄)
   async limited(ip, kind, max, windowMs) {
-    const key = (await sha256(`gugupang-limit:${ip}`)).slice(0, 32);
+    const key = `${kind}:${(await sha256(`gugupang-limit:${ip}`)).slice(0, 32)}`;
     const w = Math.floor(Date.now() / windowMs);
-    this.sql.exec('DELETE FROM ip_limits WHERE kind = ? AND win < ?', kind, w);
-    this.sql.exec(
-      'INSERT INTO ip_limits (ip, kind, win, count) VALUES (?, ?, ?, 1) ON CONFLICT (ip, kind, win) DO UPDATE SET count = count + 1',
-      key, kind, w,
-    );
-    const row = this.sql.exec('SELECT count FROM ip_limits WHERE ip = ? AND kind = ? AND win = ?', key, kind, w).one();
-    return row.count > max;
+    if (!this.limits) this.limits = new Map();
+    if (this.limits.size > 5000) {
+      for (const [k, v] of this.limits) if (v.w !== Math.floor(Date.now() / v.ms)) this.limits.delete(k);
+    }
+    let v = this.limits.get(key);
+    if (!v || v.w !== w) { v = { w, ms: windowMs, n: 0 }; this.limits.set(key, v); }
+    v.n++;
+    return v.n > max;
   }
 
   async newSession(school, nick) {
@@ -445,8 +454,8 @@ export class Lobby extends DurableObject {
     const th = await sha256(token);
     const s = this.sql.exec('SELECT school, nick, last FROM sessions WHERE token_hash = ?', th).toArray()[0];
     if (!s || Date.now() - s.last > SESSION_DAYS * DAY_MS) return null;
-    // 하루에 한 번만 시각을 고쳐 써서 무료 한도(쓰기)를 아낌
-    if (Date.now() - s.last > DAY_MS) this.sql.exec('UPDATE sessions SET last = ? WHERE token_hash = ?', Date.now(), th);
+    // 30일에 한 번만 시각을 고쳐 써서 무료 한도(쓰기)를 아낌 (1년 동안 안 쓰면 만료)
+    if (Date.now() - s.last > SESSION_TOUCH_MS) this.sql.exec('UPDATE sessions SET last = ? WHERE token_hash = ?', Date.now(), th);
     return { school: s.school, nick: s.nick };
   }
 
@@ -490,7 +499,10 @@ export class Lobby extends DurableObject {
       this.sql.exec('UPDATE accounts SET fails = ? WHERE school = ? AND nick = ?', fails, school, nick);
       return { ok: false, status: 401, code: 'wrong_pin', error: `비밀번호가 틀렸어요. (남은 기회 ${MAX_FAILS - fails}번)` };
     }
-    this.sql.exec('UPDATE accounts SET fails = 0, locked_until = 0, last = ? WHERE school = ? AND nick = ?', now, school, nick);
+    // 틀린 횟수가 남아 있을 때만 지움 (매번 쓰면 무료 한도를 씀)
+    if (a.fails || a.locked_until || now - a.last > SESSION_TOUCH_MS) {
+      this.sql.exec('UPDATE accounts SET fails = 0, locked_until = 0, last = ? WHERE school = ? AND nick = ?', now, school, nick);
+    }
     return { ok: true, token: await this.newSession(school, nick), school, nick };
   }
 

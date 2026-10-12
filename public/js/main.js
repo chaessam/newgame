@@ -1609,13 +1609,37 @@ async function loadStats() {
 loadStats();
 
 // 게임 도중에 창을 닫거나 다른 주소로 가도 셈
-addEventListener('pagehide', () => { if (match) match.reportPlayed(); });
+addEventListener('pagehide', () => { if (match) match.reportPlayed(); sendPlayed(true); });
+// 다른 앱으로 넘어갈 때도 (태블릿은 창을 닫아도 pagehide가 안 오는 경우가 있음)
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') sendPlayed(true); });
 
 // 컴퓨터 대결·혼자 연습 한 판을 누적 대결 수에 더함 (너무 짧은 판은 빼요)
+// 판마다 보내지 않고 이 기기에 모았다가 5분에 한 번(또는 창을 닫거나 다른 앱으로 갈 때) 보냄 (서버 무료 한도 아끼기)
+const PLAYED_SEND_MS = 5 * 60 * 1000;
+let playedMem = { solo: 0, cpu: 0, at: 0 }; // 기기에 저장할 수 없을 때(사생활 보호 모드 등)는 메모리에만
+function playedPending() {
+  let p = null;
+  try { p = JSON.parse(localStorage.getItem('gugu-played') || 'null'); } catch (_) { return playedMem; }
+  return p && typeof p === 'object' ? p : { solo: 0, cpu: 0, at: 0 };
+}
+function savePlayed(p) {
+  playedMem = p;
+  store.set('gugu-played', JSON.stringify(p));
+}
 function reportPlayed(mode, seconds) {
   if (seconds < 20) return;
-  const body = { mode };
+  const p = playedPending();
+  p[mode] = (p[mode] || 0) + 1;
+  savePlayed(p);
+  sendPlayed(false);
+}
+function sendPlayed(force) {
+  const p = playedPending();
+  if (!p.solo && !p.cpu) return;
+  if (!force && Date.now() - (p.at || 0) < PLAYED_SEND_MS) return;
+  const body = { solo: p.solo || 0, cpu: p.cpu || 0 };
   if (auth) body.token = auth.token;
+  savePlayed({ solo: 0, cpu: 0, at: Date.now() });
   statsLoadedAt = 0; // 메뉴로 돌아가면 바로 새 숫자를 보여 줌
   const json = JSON.stringify(body);
   // sendBeacon은 창을 닫는 중에도 브라우저가 끝까지 보내 줌
