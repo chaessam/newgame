@@ -97,6 +97,45 @@ function toast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
+// ---------------- 온라인 서버를 쓸 수 없을 때 ----------------
+// 평소에는 숨어 있다가, 서버가 "지금은 쓸 수 없어요"라고 답할 때만 안내를 보여 줌
+// serverBusy: '' (괜찮음) | 'quota' (무료 하루 사용량이 다 참) | 'down' (그 밖의 서버 문제)
+let serverBusy = '';
+// 무료 사용량은 한국 시간 오전 9시(UTC 0시)에 다시 채워짐
+function busyReopen() {
+  const kstHour = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
+  return kstHour < 9 ? '오늘 아침 9시' : '내일 아침 9시';
+}
+function setServerBusy(reason, popup) {
+  serverBusy = reason === 'quota' ? 'quota' : 'down';
+  const bar = $('busy-bar');
+  bar.innerHTML = serverBusy === 'quota'
+    ? `🔌 오늘 온라인 사용량이 다 찼어요. <b>${busyReopen()}</b>에 다시 열려요.<br>혼자 연습·컴퓨터 대결은 할 수 있어요!`
+    : '🔌 온라인 서버에 잠깐 문제가 생겼어요.<br>혼자 연습·컴퓨터 대결은 할 수 있어요!';
+  bar.hidden = false;
+  if (popup) showServerBusy();
+}
+function serverOk() {
+  serverBusy = '';
+  $('busy-bar').hidden = true;
+}
+function showServerBusy() {
+  $('busy-text').innerHTML = serverBusy === 'quota'
+    ? `오늘 친구들이 온라인 대결을 아주 많이 해서 하루 사용량이 다 찼어요.\n온라인 대결·랭킹·들어가기는 <b>${busyReopen()}</b>에 다시 열려요.`
+    : '온라인 서버에 잠깐 문제가 생겼어요.\n조금 있다가 다시 해 주세요.';
+  $('busy-guest').hidden = !!auth;
+  openModal('overlay-busy');
+}
+// 서버 답이 "지금은 쓸 수 없어요"(503)이면 이유('quota'|'down'), 아니면 ''
+async function busyReason(res) {
+  if (res.status !== 503) return '';
+  try {
+    const r = await res.clone().json();
+    if (r && typeof r.code === 'string' && r.code.indexOf('server_') === 0) return r.code.slice(7);
+  } catch (_) { /* 아래로 */ }
+  return 'down';
+}
+
 // 검색해서 고른 학교 { code, name, sido, addr }
 let pickedSchool = null;
 try { pickedSchool = JSON.parse(store.get('gugu-school-v2') || 'null'); } catch (_) { pickedSchool = null; }
@@ -127,7 +166,12 @@ function saveIdentity() {
 }
 
 // 게임을 시작하기 전: 들어와 있는지 확인
-function readIdentity() {
+// local: 혼자 연습·컴퓨터 대결 (서버가 쉬는 동안에는 들어가기 없이도 할 수 있음)
+function readIdentity(local) {
+  if (!auth && local && serverBusy) {
+    myName = normalizeNick($('name-input').value) || '나';
+    return { schoolCode: '', school: null, nick: myName };
+  }
   if (!auth) {
     toast('먼저 학교·닉네임·비밀번호를 적고 들어가기를 눌러 주세요.');
     $(pickedSchool ? ($('name-input').value.trim() ? 'pin-input' : 'name-input') : 'school-input').focus();
@@ -177,6 +221,12 @@ async function doLogin(create) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ schoolCode: id.schoolCode, nick, pin, create: !!create }),
     });
+    const busy = await busyReason(res);
+    if (busy) {
+      btn.disabled = false;
+      setServerBusy(busy, true);
+      return;
+    }
     r = await res.json();
   } catch (_) {
     r = { ok: false, error: '서버에 연결할 수 없어요.' };
@@ -196,6 +246,7 @@ async function doLogin(create) {
     return;
   }
   $('pin-input').value = '';
+  serverOk();
   setAuth({ token: r.token, schoolCode: r.school, nick: r.nick, school: pickedSchool });
   toast(r.claimed ? `비밀번호를 정했어요. ${r.nick}의 기록이 그대로 이어져요!`
     : r.created ? `${r.nick} 계정을 만들었어요. 반가워요!` : `${r.nick}, 어서 와요!`);
@@ -1163,12 +1214,12 @@ schoolUi.showPicked();
 
 document.querySelectorAll('[data-cpu]').forEach((b) => {
   b.addEventListener('click', () => {
-    if (!readIdentity()) return;
+    if (!readIdentity(true)) return;
     enterFullscreen();
     startLocal('cpu', b.dataset.cpu);
   });
 });
-$('btn-solo').onclick = () => { if (readIdentity()) { enterFullscreen(); startLocal('solo'); } };
+$('btn-solo').onclick = () => { if (readIdentity(true)) { enterFullscreen(); startLocal('solo'); } };
 $('btn-howto').onclick = () => showScreen('howto');
 $('btn-ranking').onclick = () => { saveIdentity(); showScreen('ranking'); loadRanking(rankType); };
 document.querySelectorAll('[data-back]').forEach((b) => {
@@ -1215,7 +1266,11 @@ async function refreshMyRecord(force = false) {
   recordAt = Date.now();
   try {
     const res = await fetch('/api/me', { headers: authHeaders() });
-    if (!res.ok) throw new Error();
+    if (!res.ok) {
+      const busy = await busyReason(res);
+      if (busy) setServerBusy(busy, false);
+      throw new Error();
+    }
     const r = await res.json();
     const cur = identity();
     if (cur.schoolCode !== id.schoolCode || cur.nick !== id.nick) return;
@@ -1351,6 +1406,8 @@ async function chooseTitle(titleId) {
       headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ title: titleId }),
     });
+    const busy = await busyReason(res);
+    if (busy) { closeModal('overlay-titles'); setServerBusy(busy, true); return; }
     const r = await res.json();
     if (!r.ok) { toast(r.error || '칭호를 바꾸지 못했어요.'); return; }
     const ti = titleInfo(r.title);
@@ -1503,6 +1560,13 @@ if (store.get('gugu-notice') !== NOTICE_VERSION) openModal('overlay-notice');
 
 const SHARE_URL = 'https://gugupang.chaessam.workers.dev/';
 $('btn-qr').onclick = () => openModal('overlay-qr');
+$('busy-bar').onclick = showServerBusy;
+$('btn-busy-close').onclick = () => closeModal('overlay-busy');
+$('btn-busy-solo').onclick = () => {
+  closeModal('overlay-busy');
+  if (readIdentity(true)) { enterFullscreen(); startLocal('solo'); }
+};
+closeOnBackdrop('overlay-busy');
 $('btn-qr-close').onclick = () => closeModal('overlay-qr');
 closeOnBackdrop('overlay-qr');
 // Esc: 맨 위에 열린 창 닫기
@@ -1526,7 +1590,12 @@ async function loadStats() {
   statsLoadedAt = Date.now();
   try {
     const res = await fetch('/api/stats');
-    if (!res.ok) throw new Error();
+    if (!res.ok) {
+      const busy = await busyReason(res);
+      if (busy) setServerBusy(busy, false);
+      throw new Error();
+    }
+    serverOk();
     const r = await res.json();
     if (!r.schools && !r.games) return;
     $('stat-schools').textContent = r.schools.toLocaleString('ko-KR');
@@ -1596,7 +1665,15 @@ async function loadRanking(type) {
   let data;
   try {
     const res = await fetch(`/api/rank?type=${type}&period=${period}`);
-    if (!res.ok) throw new Error();
+    if (!res.ok) {
+      const busy = await busyReason(res);
+      if (busy) {
+        setServerBusy(busy, false);
+        ul.innerHTML = `<li class="empty">${busy === 'quota' ? `오늘 사용량이 다 차서 랭킹을 볼 수 없어요. ${busyReopen()}에 다시 열려요.` : '온라인 서버가 잠깐 쉬는 중이에요.'}</li>`;
+        return;
+      }
+      throw new Error();
+    }
     data = await res.json();
   } catch (_) {
     ul.innerHTML = '<li class="empty">랭킹 서버에 연결할 수 없어요.</li>';
@@ -1677,7 +1754,8 @@ async function enterLobby() {
   try {
     await lobbyNet.connect('/ws/lobby');
     lobbyNet.send('hello');
-  } catch (_) {
+  } catch (e) {
+    if (e && e.message === 'busy') return; // 아래 'busy'에서 안내
     $('lobby-status').textContent = '온라인 서버에 연결할 수 없어요. 인터넷 연결을 확인해 주세요.';
   }
 }
@@ -1694,7 +1772,8 @@ async function joinRoom(roomId) {
   try {
     await roomNet.connect(`/ws/room/${roomId}`);
     roomNet.send('join', { token: auth ? auth.token : '' });
-  } catch (_) {
+  } catch (e) {
+    if (e && e.message === 'busy') return; // 아래 'busy'에서 안내
     toast('방에 들어갈 수 없어요.');
     enterLobby();
   }
@@ -1801,6 +1880,15 @@ function renderRoom() {
 
 lobbyNet.on('rooms', (m) => { if (screen === 'lobby') renderRooms(m.rooms); });
 lobbyNet.on('roomCreated', (m) => joinRoom(m.id));
+// 서버가 쉬는 중: 메뉴로 돌아가서 안내 (혼자 연습·컴퓨터 대결은 할 수 있음)
+function onServerBusy(m) {
+  currentRoom = null;
+  if (match && match.mode === 'online') endMatch();
+  if (['lobby', 'room', 'game'].includes(screen)) showScreen('menu');
+  setServerBusy(m.reason, true);
+}
+lobbyNet.on('busy', onServerBusy);
+roomNet.on('busy', onServerBusy);
 lobbyNet.on('disconnected', () => {
   if (screen === 'lobby') $('lobby-status').textContent = '서버 연결이 끊어졌어요. 메뉴로 갔다가 다시 들어와 주세요.';
 });
