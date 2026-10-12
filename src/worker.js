@@ -18,6 +18,7 @@ const STALE_MS = 3 * HEARTBEAT_MS;   // 이 시간 동안 소식이 없는 방�
 const RANK_CACHE_MS = 60 * 1000;
 const MAX_STATE_BYTES = 4000;
 const WEEK_MIN_GAMES = 5; // 이번 주 승률 랭킹에 오르는 최소 판 수
+const MASTER_RANK_TOP = 100; // 마스터 중 이 순위까지만 정확히 셈 (그 밖은 "TOP 100 밖")
 
 const DAY_MS = 24 * 3600 * 1000;
 const playerKey = (school, nick) => `${school}\n${nick}`;
@@ -201,6 +202,25 @@ export class Lobby extends DurableObject {
         PRIMARY KEY (ip, kind, win));
     `);
     this.sql.exec('CREATE INDEX IF NOT EXISTS players_rp ON players (rp DESC, updated)');
+    // 무료 한도(하루 읽는 줄 수)를 아끼는 색인·표
+    // - 학교마다 승리 1위(우리 학교 에이스)를 한 줄만 읽고 찾음
+    // - IP 시도 횟수에서 지난 기간 기록을 지울 때 표 전체를 훑지 않음
+    // - 승리 수마다 학생 수: 내 승리 순위를 학생 수만큼 세지 않고 이 표의 몇 줄로 셈
+    this.sql.exec(`
+      CREATE INDEX IF NOT EXISTS players_school_wins ON players (school, wins DESC, games);
+      CREATE INDEX IF NOT EXISTS ip_limits_win ON ip_limits (kind, win);
+      CREATE TABLE IF NOT EXISTS wins_hist (wins INTEGER PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0);
+      CREATE INDEX IF NOT EXISTS weekly_rate ON weekly (week, (CAST(wins AS REAL) / games) DESC, wins DESC)
+        WHERE games >= ${WEEK_MIN_GAMES};
+      CREATE TABLE IF NOT EXISTS weekly_schools (
+        week TEXT NOT NULL, school TEXT NOT NULL,
+        wins INTEGER NOT NULL DEFAULT 0, games INTEGER NOT NULL DEFAULT 0, players INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (week, school)
+      );
+      CREATE INDEX IF NOT EXISTS weekly_schools_wins ON weekly_schools (week, wins DESC);
+    `);
+    this.seedWinsHist();
+    this.seedWeeklySchools();
     this.seedCounters();
     this.seedTiers();
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
@@ -209,6 +229,33 @@ export class Lobby extends DurableObject {
   addColumn(table, column, type) {
     const cols = this.sql.exec(`PRAGMA table_info(${table})`).toArray();
     if (!cols.some((c) => c.name === column)) this.sql.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+
+  // 승리 수 분포표를 처음 한 번 채움 (그다음부터는 결과를 기록할 때 같이 고침)
+  seedWinsHist() {
+    if (this.counter('winsHistSeeded')) return;
+    this.sql.exec('DELETE FROM wins_hist');
+    this.sql.exec('INSERT INTO wins_hist (wins, n) SELECT wins, COUNT(*) FROM players GROUP BY wins');
+    this.bump('winsHistSeeded');
+  }
+
+  // 이번 주 학교 랭킹 표를 처음 한 번 채움 (그다음부터는 결과를 기록할 때 같이 고침)
+  seedWeeklySchools() {
+    if (this.counter('weeklySchoolsSeeded')) return;
+    this.sql.exec('DELETE FROM weekly_schools');
+    this.sql.exec(
+      `INSERT INTO weekly_schools (week, school, wins, games, players)
+       SELECT week, school, SUM(wins), SUM(games), COUNT(*) FROM weekly GROUP BY week, school`,
+    );
+    this.bump('weeklySchoolsSeeded');
+  }
+
+  histMove(from, to) {
+    if (from === to) return;
+    if (from !== null) this.sql.exec('UPDATE wins_hist SET n = n - 1 WHERE wins = ?', from);
+    this.sql.exec(
+      'INSERT INTO wins_hist (wins, n) VALUES (?, 1) ON CONFLICT (wins) DO UPDATE SET n = n + 1', to,
+    );
   }
 
   // 티어가 생기기 전의 기록: 승리 1번에 15점으로 처음 한 번 채움 (진 판은 빼지 않음)
@@ -491,14 +538,20 @@ export class Lobby extends DurableObject {
       ).toArray()),
       champion: champ ? playerKey(champ.school, champ.nick) : '',
       topSchool: topSchool ? topSchool.school : '',
+      // 마스터 점수 높은 순 (순위를 셀 때마다 표를 훑지 않도록)
+      masterRp: this.sql.exec(
+        `SELECT rp FROM players WHERE rp >= ? ORDER BY rp DESC LIMIT ${MASTER_RANK_TOP}`, MASTER_RP,
+      ).toArray().map((r) => r.rp),
     };
     return this.rankCache;
   }
 
-  // 마스터(1000점 이상) 중 점수 순위 — 그랜드마스터·챌린저를 정함
-  rpRank(rp) {
+  // 마스터(1000점 이상) 중 점수 순위 — 그랜드마스터·챌린저를 정함 (TOP 100 밖이면 null)
+  rpRank(rp, rc = this.rankCtx()) {
     if (rp < MASTER_RP) return null;
-    return this.sql.exec('SELECT COUNT(*) AS n FROM players WHERE rp > ?', rp).one().n + 1;
+    let above = 0;
+    for (const x of rc.masterRp) { if (x > rp) above++; else break; }
+    return above < MASTER_RANK_TOP ? above + 1 : null;
   }
 
   // 우리 학교 승리 1위인지 (학교 친구 3명 이상일 때만)
@@ -519,7 +572,7 @@ export class Lobby extends DurableObject {
       school, nick,
     ).toArray()[0] || { wins: 0, games: 0, rp: 0, bestStreak: 0, title: '' };
     const key = playerKey(school, nick);
-    const rpRank = this.rpRank(row.rp);
+    const rpRank = this.rpRank(row.rp, rc);
     const admin = isAdmin(school, nick);
     const titles = earnedTitles({
       admin,
@@ -572,6 +625,7 @@ export class Lobby extends DurableObject {
       this.addParticipant(p.school, p.nick);
       const win = p.win ? 1 : 0;
       const existed = before[i].games > 0;
+      this.histMove(existed ? before[i].wins : null, before[i].wins + win);
       const rp = applyResult(before[i].rp, win);
       this.sql.exec(
         `INSERT INTO players (school, nick, wins, games, updated, rp, streak, best_streak) VALUES (?, ?, ?, 1, ?, ?, ?, ?)
@@ -586,13 +640,22 @@ export class Lobby extends DurableObject {
          ON CONFLICT (school) DO UPDATE SET wins = wins + excluded.wins, games = games + 1, players = players + ?`,
         p.school, win, existed ? 0 : 1,
       );
+      const newThisWeek = this.sql.exec(
+        'SELECT 1 FROM weekly WHERE week = ? AND school = ? AND nick = ?', week, p.school, p.nick,
+      ).toArray().length === 0;
       this.sql.exec(
         `INSERT INTO weekly (week, school, nick, wins, games) VALUES (?, ?, ?, ?, 1)
          ON CONFLICT (week, school, nick) DO UPDATE SET wins = wins + excluded.wins, games = games + 1`,
         week, p.school, p.nick, win,
       );
+      this.sql.exec(
+        `INSERT INTO weekly_schools (week, school, wins, games, players) VALUES (?, ?, ?, 1, ?)
+         ON CONFLICT (week, school) DO UPDATE SET wins = wins + excluded.wins, games = games + 1,
+           players = players + excluded.players`,
+        week, p.school, win, newThisWeek ? 1 : 0,
+      );
     });
-    this.cache.clear();
+    // 랭킹 화면은 1분마다 새로 만듦 (판이 끝날 때마다 지우면 랭킹을 볼 때마다 표를 다시 훑게 됨)
     this.statsCache = null;
     this.rankCache = null; // 방금 결과로 순위 칭호도 새로
     const rc2 = this.rankCtx();
@@ -639,16 +702,18 @@ export class Lobby extends DurableObject {
       }
     } else if (type === 'school') {
       rows = this.sql.exec(
-        `SELECT school, SUM(wins) AS wins, SUM(games) AS games, COUNT(*) AS players FROM weekly
-         WHERE week = ? GROUP BY school HAVING SUM(wins) > 0 ORDER BY wins DESC LIMIT 50`, week,
+        `SELECT school, wins, games, players FROM weekly_schools
+         WHERE week = ? AND wins > 0 ORDER BY wins DESC LIMIT 50`, week,
       ).toArray();
     } else {
-      const order = type === 'wins' ? 'w.wins DESC, w.games' : '(CAST(w.wins AS REAL) / w.games) DESC, w.wins DESC';
-      const where = type === 'wins' ? 'w.wins > 0' : `w.games >= ${minGames}`;
+      // 이번 주 표에서 50명만 먼저 고른 뒤(색인 사용) 티어 점수를 붙임
+      const order = (t) => (type === 'wins' ? `${t}wins DESC, ${t}games` : `(CAST(${t}wins AS REAL) / ${t}games) DESC, ${t}wins DESC`);
+      const where = type === 'wins' ? 'wins > 0' : `games >= ${minGames}`;
       rows = this.sql.exec(
-        `SELECT w.school, w.nick, w.wins, w.games, COALESCE(p.rp, 0) AS rp FROM weekly w
+        `SELECT w.school, w.nick, w.wins, w.games, COALESCE(p.rp, 0) AS rp FROM
+           (SELECT school, nick, wins, games FROM weekly WHERE week = ? AND ${where} ORDER BY ${order('')} LIMIT 50) w
          LEFT JOIN players p ON p.school = w.school AND p.nick = w.nick
-         WHERE w.week = ? AND ${where} ORDER BY ${order} LIMIT 50`, week,
+         ORDER BY ${order('w.')}`, week,
       ).toArray();
     }
     // 학교 코드 → 학교 이름과 위치, 학생은 티어·대표 칭호도
@@ -689,7 +754,7 @@ export class Lobby extends DurableObject {
     const p = this.profile(code, id.nick);
     if (!p.games) return { auth: true, found: false, rp: 0, tier: p.tier, titles: p.titles, title: p.title, chosen: p.chosen };
     const winsRank = p.wins > 0
-      ? this.sql.exec('SELECT COUNT(*) AS n FROM players WHERE wins > ?', p.wins).one().n + 1
+      ? this.sql.exec('SELECT COALESCE(SUM(n), 0) AS n FROM wins_hist WHERE wins > ?', p.wins).one().n + 1
       : null;
     const sc = this.sql.exec('SELECT wins FROM schools WHERE school = ?', code).toArray()[0];
     const schoolRank = sc && sc.wins > 0
@@ -699,9 +764,6 @@ export class Lobby extends DurableObject {
     const w = this.sql.exec(
       'SELECT wins, games FROM weekly WHERE week = ? AND school = ? AND nick = ?', week, code, id.nick,
     ).toArray()[0] || { wins: 0, games: 0 };
-    const weekRank = w.wins > 0
-      ? this.sql.exec('SELECT COUNT(*) AS n FROM weekly WHERE week = ? AND wins > ?', week, w.wins).one().n + 1
-      : null;
     return {
       auth: true,
       found: true,
@@ -716,7 +778,7 @@ export class Lobby extends DurableObject {
       titles: p.titles,
       title: p.title,
       chosen: p.chosen,
-      week: { wins: w.wins, games: w.games, rank: weekRank },
+      week: { wins: w.wins, games: w.games },
     };
   }
 }
