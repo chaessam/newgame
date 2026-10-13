@@ -633,6 +633,8 @@ export class Lobby extends DurableObject {
     this.bump('online');
     const rc = this.rankCtx();
     const before = results.map((p) => this.profile(p.school, p.nick, rc));
+    // 학교 기록은 학교마다 모아서 한 번에 씀 (같은 반 친구끼리 대결하면 학교 줄을 두 번 쓰지 않도록)
+    const bySchool = new Map();
     results.forEach((p, i) => {
       this.addParticipant(p.school, p.nick);
       const win = p.win ? 1 : 0;
@@ -647,11 +649,6 @@ export class Lobby extends DurableObject {
            best_streak = MAX(best_streak, CASE WHEN excluded.wins > 0 THEN streak + 1 ELSE 0 END)`,
         p.school, p.nick, win, now, rp, win, win,
       );
-      this.sql.exec(
-        `INSERT INTO schools (school, wins, games, players) VALUES (?, ?, 1, 1)
-         ON CONFLICT (school) DO UPDATE SET wins = wins + excluded.wins, games = games + 1, players = players + ?`,
-        p.school, win, existed ? 0 : 1,
-      );
       const newThisWeek = this.sql.exec(
         'SELECT 1 FROM weekly WHERE week = ? AND school = ? AND nick = ?', week, p.school, p.nick,
       ).toArray().length === 0;
@@ -660,13 +657,27 @@ export class Lobby extends DurableObject {
          ON CONFLICT (week, school, nick) DO UPDATE SET wins = wins + excluded.wins, games = games + 1`,
         week, p.school, p.nick, win,
       );
-      this.sql.exec(
-        `INSERT INTO weekly_schools (week, school, wins, games, players) VALUES (?, ?, ?, 1, ?)
-         ON CONFLICT (week, school) DO UPDATE SET wins = wins + excluded.wins, games = games + 1,
-           players = players + excluded.players`,
-        week, p.school, win, newThisWeek ? 1 : 0,
-      );
+      const sc = bySchool.get(p.school) || { wins: 0, games: 0, players: 0, weekPlayers: 0 };
+      sc.wins += win;
+      sc.games += 1;
+      sc.players += existed ? 0 : 1;
+      sc.weekPlayers += newThisWeek ? 1 : 0;
+      bySchool.set(p.school, sc);
     });
+    for (const [school, sc] of bySchool) {
+      this.sql.exec(
+        `INSERT INTO schools (school, wins, games, players) VALUES (?, ?, ?, ?)
+         ON CONFLICT (school) DO UPDATE SET wins = wins + excluded.wins, games = games + excluded.games,
+           players = players + excluded.players`,
+        school, sc.wins, sc.games, sc.players,
+      );
+      this.sql.exec(
+        `INSERT INTO weekly_schools (week, school, wins, games, players) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (week, school) DO UPDATE SET wins = wins + excluded.wins, games = games + excluded.games,
+           players = players + excluded.players`,
+        week, school, sc.wins, sc.games, sc.weekPlayers,
+      );
+    }
     // 랭킹 화면은 1분마다 새로 만듦 (판이 끝날 때마다 지우면 랭킹을 볼 때마다 표를 다시 훑게 됨)
     this.statsCache = null;
     this.rankCache = null; // 방금 결과로 순위 칭호도 새로
@@ -1030,14 +1041,15 @@ export class GameRoom extends DurableObject {
       this.meta = null;
       return;
     }
-    if (m.hostId === a.id) m.hostId = ps[0].a.id;
+    // 방 정보(meta)는 방장이 나갈 때만 바뀜. 바뀌지 않았으면 다시 저장하지 않음 (무료 쓰기 한도 아끼기)
+    const hostLeft = m.hostId === a.id;
+    if (hostLeft) m.hostId = ps[0].a.id;
     if (m.status === 'playing' && a.alive) {
       this.broadcast('playerDead', { id: a.id }, null, ps);
-      await this.save();
-      await this.checkEnd(ws);
+      await this.checkEnd(ws); // 게임이 끝나면 여기서 방 정보를 저장함
       if (this.meta && this.meta.status === 'waiting') return;
     }
-    await this.save();
+    if (hostLeft) await this.save();
     this.broadcast('room', { room: this.info(ps) }, null, ps);
     await this.syncLobby(ps);
   }
