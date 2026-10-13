@@ -19,5 +19,10 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Lobby", "GameRoom"] }
   ],
-  "observability": { "enabled": true }
+  // 로그: 무료 플랜은 하루 20만 건까지 저장. 대결 중 메시지 하나하나가 로그 1건이라 금방 차서,
+  // 10번 중 1번만 저장 (문제가 생기면 같은 에러가 여러 번 나므로 찾는 데는 충분). 게임 동작과는 상관없음
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 0.1 }
+  }
 }
