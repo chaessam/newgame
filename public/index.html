@@ -196,6 +196,19 @@
         </div>
       </div>
     </div>
+    <!-- 운영자만: 오늘 현황 -->
+    <div class="overlay qr-overlay" id="overlay-admin">
+      <div class="modal qr-modal admin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-title">
+        <h2 id="admin-title">📊 오늘 현황</h2>
+        <p class="admin-day" id="admin-day"></p>
+        <div class="admin-grid" id="admin-grid"></div>
+        <p class="admin-note">한국 시간 0시부터 지금까지예요. 운영자 계정에만 보여요. (2분마다 새로 셈)</p>
+        <div class="btn-row wide">
+          <button class="btn soft" id="btn-admin-refresh">새로고침</button>
+          <button class="btn primary" id="btn-admin-close">닫기</button>
+        </div>
+      </div>
+    </div>
     <!-- 교실 화면에 띄워서 학생들이 휴대폰으로 찍고 들어오게 -->
     <div class="overlay qr-overlay" id="overlay-qr">
       <div class="modal qr-modal" role="dialog" aria-modal="true" aria-labelledby="qr-title">
