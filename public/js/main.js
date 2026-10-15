@@ -1312,6 +1312,15 @@ function renderMyRecord(r, id) {
   out.onclick = () => { if (window.confirm(`${id.nick}에서 나갈까요?\n다음에 들어올 때 비밀번호가 필요해요.`)) logout(); };
   const btns = document.createElement('div');
   btns.className = 'mt-btns';
+  if (myBadge.tier === 'admin') {
+    // 운영자만: 오늘 현황
+    const today = document.createElement('button');
+    today.type = 'button';
+    today.className = 'btn soft small mt-today';
+    today.textContent = '📊 오늘 현황';
+    today.onclick = () => openAdminToday();
+    btns.append(today);
+  }
   btns.append(book, out);
   head.appendChild(btns);
   card.appendChild(head);
@@ -1568,6 +1577,59 @@ $('btn-busy-solo').onclick = () => {
 };
 closeOnBackdrop('overlay-busy');
 $('btn-qr-close').onclick = () => closeModal('overlay-qr');
+
+// ---------------- 운영자: 오늘 현황 ----------------
+async function loadAdminToday() {
+  const grid = $('admin-grid');
+  grid.innerHTML = '<p class="admin-loading">불러오는 중...</p>';
+  let r;
+  try {
+    const res = await fetch('/api/admin/today', { headers: authHeaders() });
+    r = await res.json();
+  } catch (_) {
+    r = { ok: false, error: '서버에 연결할 수 없어요.' };
+  }
+  if (!r || !r.ok) {
+    grid.innerHTML = '';
+    const p = document.createElement('p');
+    p.className = 'admin-loading';
+    p.textContent = (r && r.error) || '불러오지 못했어요.';
+    grid.appendChild(p);
+    return;
+  }
+  const n = (v) => Number(v || 0).toLocaleString('ko-KR');
+  const time = new Date(r.at);
+  $('admin-day').textContent = `${r.day} · ${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')} 기준`;
+  const items = [
+    ['오늘 온라인 대결한 학생', n(r.onlineStudents), `${n(r.onlineSchools)}개 학교`],
+    ['오늘 온라인 대결', n(r.onlineGames), '판'],
+    ['오늘 컴퓨터 대결', n(r.cpuGames), '판'],
+    ['오늘 혼자 연습', n(r.soloGames), '판'],
+    ['오늘 새로 만든 계정', n(r.newAccounts), '명'],
+    ['이번 주 온라인 대결한 학생', n(r.weekStudents), `전체 참여 학생 ${n(r.totalStudents)}명`],
+  ];
+  grid.innerHTML = '';
+  for (const [label, value, sub] of items) {
+    const box = document.createElement('div');
+    box.className = 'admin-item';
+    const b = document.createElement('b');
+    b.textContent = value;
+    const l = document.createElement('span');
+    l.textContent = label;
+    const s = document.createElement('small');
+    s.textContent = sub;
+    box.append(l, b, s);
+    grid.appendChild(box);
+  }
+}
+function openAdminToday() {
+  $('admin-day').textContent = '';
+  openModal('overlay-admin');
+  loadAdminToday();
+}
+$('btn-admin-refresh').onclick = () => loadAdminToday();
+$('btn-admin-close').onclick = () => closeModal('overlay-admin');
+closeOnBackdrop('overlay-admin');
 closeOnBackdrop('overlay-qr');
 // Esc: 맨 위에 열린 창 닫기
 document.addEventListener('keydown', (e) => {

@@ -25,6 +25,14 @@ const WEEK_MIN_GAMES = 5; // 이번 주 승률 랭킹에 오르는 최소 판 �
 const MASTER_RANK_TOP = 100; // 마스터 중 이 순위까지만 정확히 셈 (그 밖은 "TOP 100 밖")
 
 const playerKey = (school, nick) => `${school}\n${nick}`;
+// 한국 시간 오늘 날짜("2026-10-15")와 오늘 0시(ms)
+const KST_MS = 9 * 3600 * 1000;
+function kstToday(now = Date.now()) {
+  const d = new Date(now + KST_MS);
+  const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - KST_MS;
+  return { day: new Date(start + KST_MS).toISOString().slice(0, 10), start };
+}
+const ADMIN_STATS_CACHE_MS = 2 * 60 * 1000;
 
 // ---- 로그인 (학교 + 닉네임 + 숫자 4자리 비밀번호, 구구단 디펜스와 같은 방식) ----
 // 비밀번호는 그대로 저장하지 않고 PBKDF2로 해시해서 저장해요. 로그인 표시(토큰)도 해시로만 저장해요.
@@ -220,6 +228,8 @@ export class Lobby extends DurableObject {
       );
       CREATE INDEX IF NOT EXISTS weekly_schools_wins ON weekly_schools (week, wins DESC);
     `);
+    // 운영자 '오늘 현황'용: 날마다 첫 기록 때 누적 판 수를 한 줄 적어 둠 (하루 1줄만 씀)
+    this.sql.exec('CREATE TABLE IF NOT EXISTS days (day TEXT PRIMARY KEY, online INTEGER, solo INTEGER, cpu INTEGER)');
     this.seedWinsHist();
     this.seedWeeklySchools();
     this.seedCounters();
@@ -289,6 +299,10 @@ export class Lobby extends DurableObject {
     }
     if (url.pathname === '/api/rank') return json(await this.ranking(q.get('type'), q.get('period')));
     if (url.pathname === '/api/me') return json(await this.me(token));
+    if (url.pathname === '/api/admin/today') {
+      const r = await this.adminToday(token);
+      return json(r, r.ok ? 200 : r.status || 400);
+    }
     return json({ error: 'not found' }, 404);
   }
 
@@ -387,6 +401,47 @@ export class Lobby extends DurableObject {
     this.bump('seeded');
   }
 
+  // 오늘 처음 기록할 때 지금까지의 누적 판 수를 적어 둠 → 오늘 판 수 = 지금 누적 − 오늘 아침 누적
+  ensureDay() {
+    const { day } = kstToday();
+    if (this.dayReady === day) return;
+    if (!this.sql.exec('SELECT 1 FROM days WHERE day = ?', day).toArray().length) {
+      this.sql.exec(
+        'INSERT OR IGNORE INTO days (day, online, solo, cpu) VALUES (?, ?, ?, ?)',
+        day, this.counter('online'), this.counter('solo'), this.counter('cpu'),
+      );
+    }
+    this.dayReady = day;
+  }
+
+  // 운영자만: 오늘 현황 (이미 있는 기록으로 셈, 따로 쓰는 것 없음. 2분 동안 기억)
+  async adminToday(token) {
+    const who = await this.accountOf(token);
+    if (!who || !isAdmin(who.school, who.nick)) return { ok: false, status: 403, error: '운영자만 볼 수 있어요.' };
+    if (this.adminCache && Date.now() - this.adminCache.t < ADMIN_STATS_CACHE_MS) return this.adminCache.data;
+    this.ensureDay();
+    const { day, start } = kstToday();
+    const snap = this.sql.exec('SELECT online, solo, cpu FROM days WHERE day = ?', day).one();
+    const active = this.sql.exec(
+      'SELECT COUNT(*) AS students, COUNT(DISTINCT school) AS schools FROM players WHERE updated >= ?', start,
+    ).one();
+    const data = {
+      ok: true,
+      day,
+      onlineStudents: active.students,
+      onlineSchools: active.schools,
+      onlineGames: this.counter('online') - snap.online,
+      soloGames: this.counter('solo') - snap.solo,
+      cpuGames: this.counter('cpu') - snap.cpu,
+      newAccounts: this.sql.exec('SELECT COUNT(*) AS n FROM accounts WHERE created >= ?', start).one().n,
+      weekStudents: this.sql.exec('SELECT COUNT(*) AS n FROM weekly WHERE week = ?', weekKey()).one().n,
+      totalStudents: this.counter('students'),
+      at: Date.now(),
+    };
+    this.adminCache = { t: Date.now(), data };
+    return data;
+  }
+
   stats() {
     if (this.statsCache && Date.now() - this.statsCache.t < RANK_CACHE_MS) return this.statsCache.data;
     const data = {
@@ -406,6 +461,7 @@ export class Lobby extends DurableObject {
     add.solo += Math.min(50, Math.max(0, Math.floor(Number(solo) || 0)));
     add.cpu += Math.min(50, Math.max(0, Math.floor(Number(cpu) || 0)));
     if (!add.solo && !add.cpu) return { ok: false };
+    this.ensureDay();
     if (add.solo) this.bump('solo', add.solo);
     if (add.cpu) this.bump('cpu', add.cpu);
     const who = await this.accountOf(token);
@@ -630,6 +686,7 @@ export class Lobby extends DurableObject {
   recordResult(results) {
     const now = Date.now();
     const week = weekKey(now);
+    this.ensureDay();
     this.bump('online');
     const rc = this.rankCtx();
     const before = results.map((p) => this.profile(p.school, p.nick, rc));

@@ -824,6 +824,31 @@ body.portrait .q-left { overflow: hidden; max-height: 100%; }
 .busy-ok { color: var(--cyan-soft); text-shadow: 0 0 8px rgba(79, 240, 255, 0.5); }
 .busy-guest { font-size: 14px; color: var(--ink-soft); }
 
+/* ---------- 운영자: 오늘 현황 ---------- */
+.admin-modal { text-align: center; }
+.admin-day { color: var(--ink-soft); font-size: 15px; }
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 6px 0 12px;
+}
+.admin-item {
+  padding: 10px 8px 9px;
+  border-radius: 14px;
+  background: var(--glass);
+  border: 1.5px solid rgba(79, 240, 255, 0.4);
+  box-shadow: 0 0 10px rgba(79, 240, 255, 0.15), inset 0 0 12px rgba(79, 240, 255, 0.06);
+  word-break: keep-all;
+}
+.admin-item span { display: block; font-size: 14px; color: var(--ink-soft); }
+.admin-item b { display: block; font-size: 30px; font-weight: normal; color: #fff; text-shadow: 0 0 10px var(--cyan); line-height: 1.2; }
+.admin-item small { display: block; font-size: 13px; color: var(--cyan-soft); }
+.admin-item:first-child { border-color: rgba(255, 228, 92, 0.6); }
+.admin-item:first-child b { text-shadow: 0 0 10px var(--yellow); }
+.admin-loading { grid-column: 1 / -1; color: var(--ink-soft); }
+.admin-note { font-size: 13px; color: var(--ink-soft); }
+
 /* ---------- 만든 사람 표시 (메뉴 아래) ---------- */
 .maker {
   margin-top: 16px;
@@ -1343,8 +1368,8 @@ body.portrait .panel.self .panel-name.has-np .np { font-size: 17px; }
 .pin-row input:focus { border-color: var(--cyan); box-shadow: 0 0 12px rgba(79, 240, 255, 0.5); }
 .pin-row .btn { white-space: nowrap; padding-left: 20px; padding-right: 20px; }
 .login-help { margin: 0 0 12px; font-size: 13px; color: var(--ink-soft); line-height: 1.5; }
-.mt-btns { display: flex; gap: 6px; flex: 0 0 auto; }
-.mt-out { font-size: 13px; padding: 5px 10px; }
+.mt-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; flex: 0 1 auto; max-width: 100%; }
+.mt-out, .mt-today { font-size: 13px; padding: 5px 10px; }
 
 /* ---------- 홈 화면 아래 작은 메뉴 ---------- */
 .foot-links { margin-top: 10px; display: flex; justify-content: center; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); }
