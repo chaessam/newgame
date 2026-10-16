@@ -1554,7 +1554,7 @@ document.addEventListener('pointerdown', (e) => {
 
 // ---------------- 업데이트 안내 · 개인정보처리방침 ----------------
 // 새 안내가 생기면 NOTICE_VERSION을 바꾸면 기기마다 한 번 자동으로 떠요.
-const NOTICE_VERSION = '2026-10-ggp-time';
+const NOTICE_VERSION = '2026-10-server-up';
 // 업데이트 안내는 어떻게 닫든(버튼·바깥·뒤로가기) 본 것으로 기억
 modalClosedHooks['overlay-notice'] = () => store.set('gugu-notice', NOTICE_VERSION);
 $('btn-notice').onclick = () => openModal('overlay-notice');
