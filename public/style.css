@@ -1390,6 +1390,8 @@ body.portrait .panel.self .panel-name.has-np .np { font-size: 17px; }
 .notice-item { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-line); }
 .notice-item h3 { margin-top: 0; }
 .notice-item.key { border-color: var(--pink); background: rgba(255, 79, 216, 0.1); box-shadow: 0 0 12px rgba(255, 79, 216, 0.3); }
+.notice-item.server-up { border-color: var(--yellow); background: rgba(255, 228, 92, 0.09); box-shadow: 0 0 14px rgba(255, 228, 92, 0.35); }
+.notice-item.server-up h3 { color: #fff6c2; text-shadow: 0 0 10px rgba(255, 228, 92, 0.8); }
 .tier-line { font-size: 13px; color: var(--ink-soft) !important; }
 
 /* 긴 창(칭호 도감·안내·개인정보처리방침): 제목과 닫기 버튼은 그대로, 가운데 내용만 스크롤 */
